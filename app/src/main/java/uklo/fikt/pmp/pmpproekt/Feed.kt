@@ -2,6 +2,7 @@ package uklo.fikt.pmp.pmpproekt
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,9 +22,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -31,10 +38,25 @@ import androidx.compose.ui.unit.sp
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
 import uklo.fikt.pmp.pmpproekt.data.Skill
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
-
+data class CategoryItem(
+    val id: String,
+    val nameRes: Int
+)
 @Composable
 fun SkillFeed(dbManager: DatabaseManager){
+
+    val categoryItems = listOf(
+        CategoryItem("ALL", R.string.cat_all),
+        CategoryItem("MUSIC", R.string.cat_music),
+        CategoryItem("TECH", R.string.cat_tech),
+        CategoryItem("LANG", R.string.cat_languages),
+        CategoryItem("SPORTS", R.string.cat_sports),
+        CategoryItem("GENERAL", R.string.cat_general)
+    )
+
     var skills by remember { mutableStateOf(listOf<Skill>()) }
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf("ALL") }
 
     LaunchedEffect(Unit) {
         dbManager.getSkills { fetchedSkills ->
@@ -42,13 +64,67 @@ fun SkillFeed(dbManager: DatabaseManager){
         }
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(skills){ skill ->
-            SkillCard(skill, dbManager)
+    val filteredSkills = skills.filter{ skill ->
+        val matchesSearch = skill.title.contains(searchQuery, ignoreCase = true)
+        val matchesCategory = if (selectedCategory == "ALL") {
+            true
+        } else {
+            // Проверува дали се совпаѓа со ID-то (TECH) ИЛИ со името (Програмирање)
+            // Ова е привремено решение додека не ја исчистиш базата
+            skill.category.uppercase() == selectedCategory ||
+                    (selectedCategory == "TECH" && skill.category == "Програмирање") ||
+                    (selectedCategory == "MUSIC" && skill.category == "Музика") ||
+                    (selectedCategory == "LANG" && skill.category == "Јазици") ||
+                    (selectedCategory == "SPORTS" && skill.category == "Спорт") ||
+                    (selectedCategory == "GENERAL" && skill.category == "Општо")
+        }
+        matchesCategory && matchesSearch
+    }
+    Column(modifier = Modifier.fillMaxSize()) {
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            placeholder = { Text(stringResource(R.string.search_hint)) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            shape = RoundedCornerShape(25.dp),
+            singleLine = true,
+        )
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(categoryItems) { item ->
+                FilterChip(
+                    selected = selectedCategory == item.id,
+                    onClick = {
+                        selectedCategory = item.id
+                        dbManager.logSkillView("Filter_Category", item.id)
+                    },
+                    label = { Text(stringResource(item.nameRes)) },
+                    shape = RoundedCornerShape(20.dp)
+                )
+            }
+        }
+        if(filteredSkills.isEmpty()){
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                Text(text = stringResource(R.string.no_skills), color = Color.Gray)
+            }
+        }else{
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(filteredSkills) { skill ->
+                    SkillCard(skill, dbManager)
+                }
+            }
         }
     }
 }
@@ -65,7 +141,15 @@ fun SkillCard(skill: Skill, dbManager: DatabaseManager) {
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = skill.category, color = EmeraldPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            val categoryDisplay = when (skill.category) {
+                "GENERAL" -> stringResource(R.string.cat_general)
+                "MUSIC" -> stringResource(R.string.cat_music)
+                "TECH" -> stringResource(R.string.cat_tech)
+                "LANG" -> stringResource(R.string.cat_languages)
+                "SPORTS" -> stringResource(R.string.cat_sports)
+                else -> skill.category // Ако е „Општо“ (стариот запис), прикажи го како што е
+            }
+            Text(text = categoryDisplay, color = EmeraldPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Text(text = skill.title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text(text = skill.description, color = Color.Gray, maxLines = 2)
             Spacer(modifier = Modifier.height(8.dp))

@@ -13,4 +13,11 @@
     <string name="no_skills">Сè уште нема објавени вештини.</string>
     <string name="skill_from">Од: </string>
     <string name="user"> Корисник </string>
+    <string name="category_label">Категорија</string>
+    <string name="cat_all">Сите</string>
+    <string name="cat_music">Музика</string>
+    <string name="cat_tech">Програмирање</string>
+    <string name="cat_languages">Јазици</string>
+    <string name="cat_sports">Спорт</string>
+    <string name="cat_general">Општо</string>
 </resources>

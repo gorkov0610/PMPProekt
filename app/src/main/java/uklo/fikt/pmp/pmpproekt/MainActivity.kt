@@ -13,13 +13,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -113,12 +117,51 @@ fun MainContent(email : String, onLogout : () -> Unit){
     if (showDialog) {
         var title by remember { mutableStateOf("") }
         var desc by remember { mutableStateOf("") }
+        var expanded by remember { mutableStateOf(false) } // Дали е отворено менито
+        val categoryOptions = listOf(
+            CategoryItem("GENERAL", R.string.cat_general),
+            CategoryItem("MUSIC", R.string.cat_music),
+            CategoryItem("TECH", R.string.cat_tech),
+            CategoryItem("LANG", R.string.cat_languages),
+            CategoryItem("SPORTS", R.string.cat_sports)
+        )
+        var selectedCategoryItem by remember { mutableStateOf(categoryOptions[0]) }
 
         AlertDialog(
             onDismissRequest = { showDialog = false },
             title = { Text(stringResource(R.string.add_skill_title), color = EmeraldPrimary) },
             text = {
                 Column {
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = !expanded },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = stringResource(selectedCategoryItem.nameRes),
+                            onValueChange = {},
+                            readOnly = true, // Спречува корисникот да пишува рачно
+                            label = { Text(stringResource(R.string.category_label)) }, // Додај го ова во strings.xml
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            categoryOptions.forEach { item ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(item.nameRes)) },
+                                    onClick = {
+                                        selectedCategoryItem = item
+                                        expanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         value = title,
                         onValueChange = { title = it },
@@ -153,7 +196,7 @@ fun MainContent(email : String, onLogout : () -> Unit){
                                 authorName = authManager.getCurrentUser()?.displayName
                                     ?: defaultUsername,
                                 contactEmail = email,
-                                category = "Општо"
+                                category = selectedCategoryItem.id
                             )
                             dbManager.saveSkill(newSkill) { success ->
                                 if (success) {

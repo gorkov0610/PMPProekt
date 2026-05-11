@@ -13,4 +13,11 @@
     <string name="no_skills">No skills published yet.</string>
     <string name="skill_from">From: </string>
     <string name="user"> User </string>
+    <string name="category_label">Category</string>
+    <string name="cat_all">All</string>
+    <string name="cat_music">Music</string>
+    <string name="cat_tech">Programming</string>
+    <string name="cat_languages">Languages</string>
+    <string name="cat_sports">Sports</string>
+    <string name="cat_general">General</string>
 </resources>
