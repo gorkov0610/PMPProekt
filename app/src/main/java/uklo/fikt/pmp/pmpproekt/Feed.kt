@@ -1,6 +1,10 @@
 package uklo.fikt.pmp.pmpproekt
 
 import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,13 +37,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
 import uklo.fikt.pmp.pmpproekt.data.Skill
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
+import androidx.core.net.toUri
+import androidx.core.content.edit
+
 data class CategoryItem(
     val id: String,
     val nameRes: Int
@@ -51,7 +57,7 @@ class PreferenceManager(context: Context) {
     fun trackInterest(categoryId: String) {
         if (categoryId == "ALL") return
         val currentCount = sharedPreferences.getInt(categoryId, 0)
-        sharedPreferences.edit().putInt(categoryId, currentCount + 1).apply()
+        sharedPreferences.edit { putInt(categoryId, currentCount + 1) }
     }
 
     // Најди ја категоријата со најмногу кликови
@@ -152,10 +158,26 @@ fun SkillFeed(dbManager: DatabaseManager){
 
 @Composable
 fun SkillCard(skill: Skill, dbManager: DatabaseManager) {
+    val context = LocalContext.current
+    val emailSubject = stringResource(R.string.email_subject, skill.title)
+    val emailBody = stringResource(R.string.email_body, skill.authorName)
+    val noEmailError = stringResource(R.string.no_email_client)
     Card(
         modifier = Modifier.fillMaxWidth()
             .clickable{
                 dbManager.logSkillView(skill.title, skill.category)
+
+                val uriString = "mailto:${skill.contactEmail}?" +
+                        "subject=${Uri.encode(emailSubject)}&" +
+                        "body=${Uri.encode(emailBody)}"
+                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                    data = Uri.parse(uriString)
+                }
+                try {
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(context, noEmailError, Toast.LENGTH_SHORT).show()
+                }
             },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors( containerColor = Color.White),

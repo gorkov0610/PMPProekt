@@ -20,4 +20,7 @@
     <string name="cat_languages">Јазици</string>
     <string name="cat_sports">Спорт</string>
     <string name="cat_general">Општо</string>
+    <string name="email_subject">Интерес за вештина: %1$s</string>
+    <string name="email_body">Здраво %1$s, заинтересиран сум за твојата вештина објавена на SkillSwap.</string>
+    <string name="no_email_client">Нема апликација за е-пошта</string>
 </resources>
