@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SkillSwap</string>
+    <string name="search_hint">Search skills or categories...</string>
+    <string name="slogan">Exchange knowledge, build your future</string>
+    <string name="signin_google">Sign in with Google</string>
+    <string name="signin_google_text">Secure login via Google</string>
+    <string name="add_skill_title">What do you offer?</string>
+    <string name="skill_name_label">Skill name (e.g. Guitar)</string>
+    <string name="description_label">Short description</string>
+    <string name="publish_button">Publish</string>
+    <string name="cancel_button">Cancel</string>
+    <string name="no_skills">No skills published yet.</string>
+    <string name="skill_from">From: </string>
+    <string name="user"> User </string>
+</resources>

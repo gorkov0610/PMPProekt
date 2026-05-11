@@ -30,6 +30,7 @@ import com.google.android.gms.common.api.ApiException
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
 import uklo.fikt.pmp.pmpproekt.ui.theme.SlateSecondary
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun LoginScreen(onLoginSuccess : () -> Unit){
@@ -45,8 +46,7 @@ fun LoginScreen(onLoginSuccess : () -> Unit){
                 // Ова е клучниот дел:
                 authManager.signInWithGoogle(token) { success ->
                     if (success) {
-                        Log.d("AuthSuccess", "Најавата е успешна!")
-                        onLoginSuccess() // Ова мора да се изврши за да се смени екранот!
+                        onLoginSuccess()
                     } else {
                         Log.e("AuthError", "Firebase не го прифати токенот")
                     }
@@ -72,14 +72,14 @@ fun LoginScreen(onLoginSuccess : () -> Unit){
                 modifier = Modifier.padding(32.dp)
             ) {
                 Text(
-                    text = "SkillSwap",
+                    text = stringResource(R.string.app_name),
                     fontSize = 40.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = EmeraldPrimary
                 )
 
                 Text(
-                    text = "Размени знаење, изгради иднина",
+                    text = stringResource(R.string.slogan),
                     fontSize = 16.sp,
                     color = SlateSecondary,
                     modifier = Modifier.padding(top = 8.dp)
@@ -101,7 +101,7 @@ fun LoginScreen(onLoginSuccess : () -> Unit){
                     elevation = ButtonDefaults.buttonElevation(4.dp)
                 ) {
                     Text(
-                        text = "Продолжи со Google",
+                        text = stringResource(R.string.signin_google),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color.White
@@ -111,7 +111,7 @@ fun LoginScreen(onLoginSuccess : () -> Unit){
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
-                    text = "Безбедна најава преку Google",
+                    text = stringResource(R.string.signin_google_text),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.LightGray
                 )

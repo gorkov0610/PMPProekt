@@ -25,6 +25,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
@@ -68,7 +69,7 @@ fun SkillCard(skill: Skill, dbManager: DatabaseManager) {
             Text(text = skill.title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text(text = skill.description, color = Color.Gray, maxLines = 2)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Од: ${skill.authorName}", style = MaterialTheme.typography.labelSmall)
+            Text(text = stringResource(R.string.skill_from) + skill.authorName , style = MaterialTheme.typography.labelSmall)
         }
     }
 }
