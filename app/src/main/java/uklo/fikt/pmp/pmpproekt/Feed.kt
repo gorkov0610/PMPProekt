@@ -1,5 +1,6 @@
 package uklo.fikt.pmp.pmpproekt
 
+import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -42,6 +44,22 @@ data class CategoryItem(
     val id: String,
     val nameRes: Int
 )
+class PreferenceManager(context: Context) {
+    private val sharedPreferences = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+
+    // Зголеми го бројот на кликови за одредена категорија
+    fun trackInterest(categoryId: String) {
+        if (categoryId == "ALL") return
+        val currentCount = sharedPreferences.getInt(categoryId, 0)
+        sharedPreferences.edit().putInt(categoryId, currentCount + 1).apply()
+    }
+
+    // Најди ја категоријата со најмногу кликови
+    fun getMostInterestedCategory(): String {
+        val categories = listOf("MUSIC", "TECH", "LANG", "SPORTS", "GENERAL")
+        return categories.maxByOrNull { sharedPreferences.getInt(it, 0) } ?: "ALL"
+    }
+}
 @Composable
 fun SkillFeed(dbManager: DatabaseManager){
 
@@ -53,6 +71,8 @@ fun SkillFeed(dbManager: DatabaseManager){
         CategoryItem("SPORTS", R.string.cat_sports),
         CategoryItem("GENERAL", R.string.cat_general)
     )
+    val context = LocalContext.current
+    val prefManager = remember { PreferenceManager(context) }
 
     var skills by remember { mutableStateOf(listOf<Skill>()) }
     var searchQuery by remember { mutableStateOf("") }
@@ -104,6 +124,7 @@ fun SkillFeed(dbManager: DatabaseManager){
                     selected = selectedCategory == item.id,
                     onClick = {
                         selectedCategory = item.id
+                        prefManager.trackInterest(item.id)
                         dbManager.logSkillView("Filter_Category", item.id)
                     },
                     label = { Text(stringResource(item.nameRes)) },
