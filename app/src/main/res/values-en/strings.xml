@@ -23,4 +23,7 @@
     <string name="email_subject">Interest in skill: %1$s</string>
     <string name="email_body">Hi %1$s, I am interested in your skill posted on SkillSwap.</string>
     <string name="no_email_client">No email app found</string>
+    <string name="chat_with">Chat with</string>
+    <string name="type_message">Type a message...</string>
+    <string name="open_chat">Open chat</string>
 </resources>

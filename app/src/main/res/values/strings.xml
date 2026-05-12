@@ -23,4 +23,7 @@
     <string name="email_subject">Интерес за вештина: %1$s</string>
     <string name="email_body">Здраво %1$s, заинтересиран сум за твојата вештина објавена на SkillSwap.</string>
     <string name="no_email_client">Нема апликација за е-пошта</string>
+    <string name="chat_with">Разговор со</string>
+    <string name="type_message">Напиши порака...</string>
+    <string name="open_chat">Отвори разговор</string>
 </resources>

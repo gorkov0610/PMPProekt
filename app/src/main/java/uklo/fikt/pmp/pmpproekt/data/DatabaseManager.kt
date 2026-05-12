@@ -6,8 +6,8 @@ import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.analytics.analytics
 import com.google.firebase.analytics.logEvent
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.toObjects
-import uklo.fikt.pmp.pmpproekt.data.Skill
 
 class DatabaseManager {
     private val db = FirebaseFirestore.getInstance()
@@ -39,5 +39,25 @@ class DatabaseManager {
             val skills = snapshots?.toObjects<Skill>() ?: emptyList()
             onResult(skills)
         }
+    }
+    fun sendMessage(skillid : String, message: Message){
+        db.collection("skills").document(skillid)
+            .collection("message").add(message)
+    }
+
+    fun listenForMessages(skillId: String, onMessagesUpdate: (List<Message>) -> Unit) {
+        db.collection("skills")
+            .document(skillId)
+            .collection("message") // Провери дали е "message" или "messages" како во Firebase
+            .orderBy("timestamp", Query.Direction.DESCENDING) // Ги влечеме од најнови кон најстари
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) return@addSnapshotListener
+
+                val messages = snapshot?.documents?.mapNotNull { doc ->
+                    doc.toObject(Message::class.java)
+                } ?: emptyList()
+
+                onMessagesUpdate(messages)
+            }
     }
 }

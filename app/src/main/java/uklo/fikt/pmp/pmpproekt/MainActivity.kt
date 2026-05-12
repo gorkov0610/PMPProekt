@@ -1,5 +1,6 @@
 package uklo.fikt.pmp.pmpproekt
 
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -43,9 +44,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.media3.common.util.UnstableApi
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
+import uklo.fikt.pmp.pmpproekt.data.Screen
 import uklo.fikt.pmp.pmpproekt.data.Skill
 import uklo.fikt.pmp.pmpproekt.ui.theme.BackgroundGray
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
@@ -55,6 +63,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
             PMPProektTheme {
                 val authManager = remember { AuthManager(applicationContext) }
@@ -111,7 +120,31 @@ fun MainContent(email : String, onLogout : () -> Unit){
         }
     ){ padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize().background(BackgroundGray)) {
-            SkillFeed(dbManager)
+            val navController = rememberNavController()
+
+            NavHost(navController, Screen.Feed.route){
+                composable(Screen.Feed.route){
+                    SkillFeed(
+                        dbManager,
+                        onChatClick = { skill ->
+                            val encodeName = Uri.encode(skill.authorName)
+                            navController.navigate("chat/${skill.id}/$encodeName")
+                        })
+                }
+                composable(
+                    route = "chat/{skillId}/{authorName}",
+                    arguments = listOf(
+                        navArgument("skillId") { type = NavType.StringType },
+                        navArgument("authorName") { type = NavType.StringType }
+                    )
+                ) { backStackEntry ->
+                    val skillId = backStackEntry.arguments?.getString("skillId") ?: ""
+                    val authorName = backStackEntry.arguments?.getString("authorName") ?: ""
+
+                    ChatScreen(skillId = skillId, dbManager = dbManager, authorName = authorName, onBack = { navController.popBackStack() })
+                }
+            }
+
         }
     }
     if (showDialog) {

@@ -28,14 +28,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -43,8 +46,8 @@ import androidx.compose.ui.unit.sp
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
 import uklo.fikt.pmp.pmpproekt.data.Skill
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
-import androidx.core.net.toUri
 import androidx.core.content.edit
+import androidx.core.net.toUri
 
 data class CategoryItem(
     val id: String,
@@ -67,7 +70,7 @@ class PreferenceManager(context: Context) {
     }
 }
 @Composable
-fun SkillFeed(dbManager: DatabaseManager){
+fun SkillFeed(dbManager: DatabaseManager, onChatClick: (Skill) -> Unit){
 
     val categoryItems = listOf(
         CategoryItem("ALL", R.string.cat_all),
@@ -149,7 +152,7 @@ fun SkillFeed(dbManager: DatabaseManager){
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(filteredSkills) { skill ->
-                    SkillCard(skill, dbManager)
+                    SkillCard(skill, dbManager, onChatClick = {onChatClick(skill)})
                 }
             }
         }
@@ -157,21 +160,22 @@ fun SkillFeed(dbManager: DatabaseManager){
 }
 
 @Composable
-fun SkillCard(skill: Skill, dbManager: DatabaseManager) {
+fun SkillCard(skill: Skill, dbManager: DatabaseManager, onChatClick: () -> Unit) {
     val context = LocalContext.current
     val emailSubject = stringResource(R.string.email_subject, skill.title)
     val emailBody = stringResource(R.string.email_body, skill.authorName)
     val noEmailError = stringResource(R.string.no_email_client)
     Card(
-        modifier = Modifier.fillMaxWidth()
-            .clickable{
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
                 dbManager.logSkillView(skill.title, skill.category)
 
                 val uriString = "mailto:${skill.contactEmail}?" +
                         "subject=${Uri.encode(emailSubject)}&" +
                         "body=${Uri.encode(emailBody)}"
                 val intent = Intent(Intent.ACTION_SENDTO).apply {
-                    data = Uri.parse(uriString)
+                    data = uriString.toUri()
                 }
                 try {
                     context.startActivity(intent)
@@ -183,20 +187,41 @@ fun SkillCard(skill: Skill, dbManager: DatabaseManager) {
         colors = CardDefaults.cardColors( containerColor = Color.White),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            val categoryDisplay = when (skill.category) {
-                "GENERAL" -> stringResource(R.string.cat_general)
-                "MUSIC" -> stringResource(R.string.cat_music)
-                "TECH" -> stringResource(R.string.cat_tech)
-                "LANG" -> stringResource(R.string.cat_languages)
-                "SPORTS" -> stringResource(R.string.cat_sports)
-                else -> skill.category // Ако е „Општо“ (стариот запис), прикажи го како што е
+        Box(modifier = Modifier.fillMaxWidth()){
+            Column(modifier = Modifier.padding(16.dp)) {
+                val categoryDisplay = when (skill.category) {
+                    "GENERAL" -> stringResource(R.string.cat_general)
+                    "MUSIC" -> stringResource(R.string.cat_music)
+                    "TECH" -> stringResource(R.string.cat_tech)
+                    "LANG" -> stringResource(R.string.cat_languages)
+                    "SPORTS" -> stringResource(R.string.cat_sports)
+                    else -> skill.category // Ако е „Општо“ (стариот запис), прикажи го како што е
+                }
+                Text(
+                    text = categoryDisplay,
+                    color = EmeraldPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(text = skill.title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(text = skill.description, color = Color.Gray, maxLines = 2)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.skill_from) + skill.authorName,
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
-            Text(text = categoryDisplay, color = EmeraldPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Text(text = skill.title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text(text = skill.description, color = Color.Gray, maxLines = 2)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = stringResource(R.string.skill_from) + skill.authorName , style = MaterialTheme.typography.labelSmall)
+            IconButton(
+                onClick = onChatClick,
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .padding(8.dp)
+                ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Chat,
+                    contentDescription = stringResource(R.string.open_chat),
+                    tint = EmeraldPrimary
+                )
+            }
         }
     }
 }
