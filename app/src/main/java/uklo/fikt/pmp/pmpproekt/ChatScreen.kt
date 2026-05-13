@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -22,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,8 +40,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
 import uklo.fikt.pmp.pmpproekt.data.Message
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
@@ -53,21 +56,37 @@ fun formatTimestamp(timestamp: Long): String {
     return sdf.format(Date(timestamp))
 }
 @Composable
-fun ChatBubble(message: Message) {
-    val isCurrentUser = message.senderId == "my_unique_id"
-
-    Column(
+fun ChatBubble(message: Message, currentUserId : String) {
+    val isCurrentUser = message.senderId == currentUserId
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalAlignment = if (isCurrentUser) Alignment.End else Alignment.Start
+        // Ги турка твоите пораки десно, туѓите лево
+        horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom // Сликата да биде порамнета со дното на пораката
     ) {
+        // 1. АКО Е ТУЃА ПОРАКА: Прикажи слика од лево
+        if (!isCurrentUser) {
+            AsyncImage(
+                model = message.senderPhotoUrl.ifEmpty { "https://cdn-icons-png.flaticon.com/512/149/149071.png" },
+                contentDescription = "Profile Picture",
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color.LightGray),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+
+        // 2. БАЛОНЧЕТО (Твојот постоечки Surface)
         Surface(
             shape = RoundedCornerShape(
                 topStart = 16.dp,
                 topEnd = 16.dp,
-                bottomStart = if (isCurrentUser) 16.dp else 0.dp,
-                bottomEnd = if (isCurrentUser) 0.dp else 16.dp
+                bottomStart = if (isCurrentUser) 16.dp else 2.dp,
+                bottomEnd = if (isCurrentUser) 2.dp else 16.dp
             ),
             color = if (isCurrentUser) EmeraldPrimary else Color(0xFFF1F1F1),
             tonalElevation = 2.dp
@@ -96,26 +115,34 @@ fun ChatBubble(message: Message) {
         }
     }
 }
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(skillId: String, dbManager: DatabaseManager, authorName: String, onBack: () -> Unit = {}) {
+fun ChatScreen(skillId: String, dbManager: DatabaseManager, authManager: AuthManager, authorName: String, onBack: () -> Unit) {
     var messageText by remember { mutableStateOf("") }
     var messages by remember { mutableStateOf(listOf<Message>()) }
+    val currentUser = authManager.getCurrentUser()
+    val currentUserId = currentUser?.uid ?: "unknown"
+    val currentUserName = currentUser?.displayName ?: stringResource(R.string.me)
 
     LaunchedEffect(skillId) {
         dbManager.listenForMessages(skillId) { messages = it }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier.fillMaxSize().background(Color.White)
+    ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = EmeraldPrimary, // Твојата зелена боја
-            shadowElevation = 4.dp
+            shadowElevation = 8.dp
         ) {
             Row(
                 modifier = Modifier
-                    .padding(8.dp)
-                    .statusBarsPadding(), // Да не влегува под иконите за батерија/час
+                    .padding(horizontal = 4.dp)
+                    .height(64.dp)
+                    .statusBarsPadding(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
@@ -142,7 +169,7 @@ fun ChatScreen(skillId: String, dbManager: DatabaseManager, authorName: String, 
             reverseLayout = true // Најновите пораки да бидат долу до тастатурата
         ) {
             items(messages) { msg ->
-                ChatBubble(msg)
+                ChatBubble(msg, currentUserId)
             }
         }
 
@@ -177,12 +204,11 @@ fun ChatScreen(skillId: String, dbManager: DatabaseManager, authorName: String, 
                         .background(EmeraldPrimary)
                         .clickable {
                             if (messageText.isNotBlank()) {
-                                val currentUserId = "my_unique_id"
-                                val currentUsername = "Hristijan"
                                 val newMessage = Message(
                                     senderId = currentUserId,
+                                    senderPhotoUrl = currentUser?.photoUrl.toString(),
                                     text = messageText,
-                                    senderName = currentUsername,
+                                    senderName = currentUserName,
                                     timestamp = System.currentTimeMillis()
                                 )
                                 dbManager.sendMessage(skillId, newMessage)

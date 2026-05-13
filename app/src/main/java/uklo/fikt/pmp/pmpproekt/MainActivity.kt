@@ -3,6 +3,7 @@ package uklo.fikt.pmp.pmpproekt
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -91,36 +92,44 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainContent(email : String, onLogout : () -> Unit){
+    val navController = rememberNavController()
     val context = LocalContext.current
     val dbManager = remember { DatabaseManager() }
     val authManager = remember { AuthManager(context) }
     val defaultUsername = stringResource(R.string.user)
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
     var showDialog by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text( stringResource(R.string.app_name), color = Color.White) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = EmeraldPrimary
-                ),
-                actions = {
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = Color.White)
+            if(currentRoute == Screen.Feed.route) { // Користи ја константата ако ја имаш
+                TopAppBar(
+                    title = { Text(stringResource(R.string.app_name), color = Color.White) },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
+                    actions = {
+                        IconButton(onClick = onLogout) {
+                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = Color.White)
+                        }
                     }
-                })
+                )
+            }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showDialog = true },
-                containerColor = EmeraldPrimary,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add")
+            // И ПЛУСОТ ТРГНИ ГО ОД ЧЕТОТ
+            if (currentRoute == Screen.Feed.route) {
+                FloatingActionButton(
+                    onClick = { showDialog = true },
+                    containerColor = EmeraldPrimary,
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add")
+                }
             }
         }
     ){ padding ->
+        // ТУКА БЕШЕ ГРЕШКАТА - НЕ ДЕФИНИРАЈ НОВ navController ТУКА
         Box(modifier = Modifier.padding(padding).fillMaxSize().background(BackgroundGray)) {
-            val navController = rememberNavController()
 
             NavHost(navController, Screen.Feed.route){
                 composable(Screen.Feed.route){
@@ -128,6 +137,7 @@ fun MainContent(email : String, onLogout : () -> Unit){
                         dbManager,
                         onChatClick = { skill ->
                             val encodeName = Uri.encode(skill.authorName)
+                            // Сега ова ќе ја ажурира состојбата на главниот navController
                             navController.navigate("chat/${skill.id}/$encodeName")
                         })
                 }
@@ -141,10 +151,15 @@ fun MainContent(email : String, onLogout : () -> Unit){
                     val skillId = backStackEntry.arguments?.getString("skillId") ?: ""
                     val authorName = backStackEntry.arguments?.getString("authorName") ?: ""
 
-                    ChatScreen(skillId = skillId, dbManager = dbManager, authorName = authorName, onBack = { navController.popBackStack() })
+                    ChatScreen(
+                        skillId = skillId,
+                        dbManager = dbManager,
+                        authorName = authorName,
+                        authManager = authManager,
+                        onBack = { navController.popBackStack() }
+                    )
                 }
             }
-
         }
     }
     if (showDialog) {
