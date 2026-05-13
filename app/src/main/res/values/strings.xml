@@ -3,7 +3,7 @@
     <string name="default_web_client_id">941348525636-ucao2pm71q7nlthukcpj9148m1120ibe.apps.googleusercontent.com</string>
     <string name="search_hint">Пребарај вештина или категорија...</string>
     <string name="signin_google">Продолжи со Google</string>
-    <string name="signin_google_text">Безбедна најава преку Google</string>
+    <string name="signin_fb">Продолжи со Facebook</string>
     <string name="slogan">Размени знаење, изгради иднина</string>
     <string name="add_skill_title">Што нудиш?</string>
     <string name="skill_name_label">Име на вештина (пр. Гитара)</string>
@@ -27,4 +27,7 @@
     <string name="type_message">Напиши порака...</string>
     <string name="open_chat">Отвори разговор</string>
     <string name="me">Јас</string>
+    <string name="facebook_app_id">123456789012345</string>
+    <string name="fb_login_protocol_scheme">fb123456789012345</string>
+    <string name="facebook_client_token">1234567890abcdef1234567890abcdef</string>
 </resources>
