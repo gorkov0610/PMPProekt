@@ -1,27 +1,30 @@
 package uklo.fikt.pmp.pmpproekt.data
 
 import android.content.Context
-import android.content.Intent
 import com.facebook.CallbackManager
-import com.facebook.login.LoginManager
-import com.facebook.login.LoginResult
 import com.facebook.FacebookCallback
 import com.facebook.FacebookException
+import com.facebook.login.LoginManager
+import com.facebook.login.LoginResult
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.firebase.Firebase
+import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FacebookAuthProvider
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.GoogleAuthProvider
 import uklo.fikt.pmp.pmpproekt.R
 
+@Suppress("DEPRECATION")
 class AuthManager (private val context: Context){
     private val auth : FirebaseAuth = FirebaseAuth.getInstance()
     private val callbackManager = CallbackManager.Factory.create()
 
     fun getCallbackManager() = callbackManager
-
     fun handleFacebookLogin(onResult: (Boolean, String?) -> Unit) {
         LoginManager.getInstance().registerCallback(
             callbackManager,
@@ -48,6 +51,7 @@ class AuthManager (private val context: Context){
             }
         )
     }
+    @Suppress("DEPRECATION")
     fun getGoogleSignInClient() : GoogleSignInClient{
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(context.getString(R.string.default_web_client_id))
@@ -63,8 +67,43 @@ class AuthManager (private val context: Context){
                 onResult(task.isSuccessful)
             }
     }
+    fun signInAnonymously(onResult: (Boolean) -> Unit) {
+        auth.signInAnonymously()
+            .addOnCompleteListener { task ->
+                onResult(task.isSuccessful)
+            }
+    }
+    fun signUpWithEmail(email: String, pass: String, onResult: (Boolean, Throwable?) -> Unit) {
+        auth.createUserWithEmailAndPassword(email, pass)
+            .addOnCompleteListener { task ->
+                onResult(task.isSuccessful, task.exception)
+            }
+    }
 
+    fun signInWithEmail(email: String, pass: String, onResult: (Boolean, Throwable?) -> Unit) {
+        auth.signInWithEmailAndPassword(email, pass)
+            .addOnCompleteListener { task ->
+                onResult(task.isSuccessful, task.exception)
+            }
+    }
     fun getCurrentUser() = auth.currentUser
     fun signOut() = auth.signOut()
+    fun getErrorMessage(exception: Exception?, context: Context): String {
+        if(exception == null) return context.getString(R.string.error_unknown)
+
+        return when (exception) {
+            // 1. Прво специфичните (под-класи)
+            is FirebaseAuthWeakPasswordException -> context.getString(R.string.error_weak_password)
+            is FirebaseAuthUserCollisionException -> context.getString(R.string.error_user_collision)
+            is FirebaseAuthInvalidUserException -> context.getString(R.string.error_user_not_found)
+
+            // 2. Потоа поопштата (parent class)
+            is FirebaseAuthInvalidCredentialsException -> context.getString(R.string.error_wrong_password)
+
+            // 3. Останати
+            is FirebaseNetworkException -> context.getString(R.string.error_network)
+            else -> context.getString(R.string.error_unknown)
+        }
+    }
 }
 
