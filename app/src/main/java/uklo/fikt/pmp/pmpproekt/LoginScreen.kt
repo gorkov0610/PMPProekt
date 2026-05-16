@@ -1,223 +1,275 @@
 package uklo.fikt.pmp.pmpproekt
 
-import android.annotation.SuppressLint
-import android.util.Log
+import android.app.Activity
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
+import com.google.firebase.auth.FirebaseAuth
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
-import uklo.fikt.pmp.pmpproekt.ui.theme.SlateSecondary
 
-@SuppressLint("LocalContextGetResourceValueCall")
 @Composable
-fun LoginScreen(onLoginSuccess : () -> Unit){
+fun LoginScreen(
+    authManager: AuthManager,
+    onLoginSuccess: () -> Unit
+) {
     val context = LocalContext.current
-    val authManager = remember { AuthManager(context) }
+    val auth = FirebaseAuth.getInstance()
 
-    // State за Email и Password
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var isRegistering by remember { mutableStateOf(false) } // Прекинувач меѓу најава и регистрација
-    var passwordVisible by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    DisposableEffect(Unit) {
-        authManager.handleFacebookLogin { success, errorMessage ->
-            if (success) {
-                onLoginSuccess()
-            } else {
-                Log.e("FB_Auth", "Грешка: $errorMessage")
-            }
-        }
-        onDispose {}
-    }
-    val launcher = rememberLauncherForActivityResult(
+    var name by remember { mutableStateOf("") }
+    var isRegistering by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+
+    // ЛАНСЕР ЗА GOOGLE НАЈАВА: Го фаќа резултатот од прозорецот на Google
+    val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-        try {
-            val account = task.getResult(ApiException::class.java)
-            account?.idToken?.let { token ->
-                authManager.signInWithGoogle(token) { success ->
-                    if (success) {
-                        onLoginSuccess()
-                    } else {
-                        Log.e("AuthError", "Firebase не го прифати токенот")
+        if (result.resultCode == Activity.RESULT_OK) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                val idToken = account?.idToken
+                if (idToken != null) {
+                    // Го праќаме стрингот (idToken) во твојата функција во AuthManager!
+                    authManager.signInWithGoogle(idToken) { success ->
+                        isLoading = false
+                        if (success) {
+                            authManager.saveUserToFirestore() // Го зачувуваме во базата
+                            onLoginSuccess()
+                        } else {
+                            Toast.makeText(context, "Грешка при Firebase најава", Toast.LENGTH_SHORT).show()
+                        }
                     }
+                } else {
+                    isLoading = false
+                    Toast.makeText(context, "Не е пронајден Google Token", Toast.LENGTH_SHORT).show()
                 }
+            } catch (e: ApiException) {
+                isLoading = false
+                Toast.makeText(context, "Грешка: ${e.statusCode}", Toast.LENGTH_SHORT).show()
             }
-        } catch (e: ApiException) {
-            Log.e("Auth", "Грешка од Google: ${e.statusCode}")
+        } else {
+            isLoading = false
         }
     }
 
-
-    Scaffold(containerColor = Color(0xFFF8F9FA)) { paddingValues ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 32.dp)
-                .verticalScroll(rememberScrollState()), // За да може да се скрола ако тастатурата пречи
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(stringResource(R.string.app_name), fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, color = EmeraldPrimary)
-            Text(stringResource(R.string.slogan), color = SlateSecondary)
+            Text(
+                text = "SkillSwap",
+                fontSize = 40.sp, // Големи, впечатливи букви
+                fontWeight = FontWeight.Black,
+                color = EmeraldPrimary,
+                letterSpacing = 1.sp
+            )
 
-            Spacer(modifier = Modifier.height(48.dp))
+            // 2. СЛОГАН ПОД ИМЕТО
+            Text(
+                text = "Размени знаење, изгради иднина.", // Твојот слоган (слободно смени го текстот)
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color.Gray,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
+            )
 
-            // --- EMAIL & PASSWORD ПОЛИЊА ---
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = if (isRegistering) "Креирај Акаунт" else "Добредојдовте Назад",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = EmeraldPrimary,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+
+            AnimatedVisibility(visible = isRegistering) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Име и презиме") },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+            }
+
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text(stringResource(R.string.label_email)) },
-                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Е-пошта") },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                 shape = RoundedCornerShape(12.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 singleLine = true
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text(stringResource(R.string.label_password)) },
-                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Лозинка") },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
                 shape = RoundedCornerShape(12.dp),
-                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    val image = if (passwordVisible)
-                        Icons.Filled.Visibility
-                    else
-                        Icons.Filled.VisibilityOff
-
-                    val description = if (passwordVisible) stringResource(R.string.desc_hide_password) else stringResource(R.string.desc_show_password)
-
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(imageVector = image, contentDescription = description)
-                    }
-                },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 singleLine = true
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-            if (errorMessage != null) {
-                Text(
-                    text = errorMessage!!,
-                    color = Color.Red,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
-            // ГЛАВНО КОПЧЕ ЗА ЕМАИЛ (Најава или Регистрација)
-            Button(
-                onClick = {
-                    val onAuthResult: (Boolean, Throwable?) -> Unit = { success, exception ->
-                        if (success) {
-                            onLoginSuccess()
+            if (isLoading) {
+                CircularProgressIndicator(color = EmeraldPrimary)
+            } else {
+                Button(
+                    onClick = {
+                        if (isRegistering) {
+                            if (name.isNotBlank() && email.isNotBlank() && password.isNotBlank()) {
+                                isLoading = true
+                                auth.createUserWithEmailAndPassword(email, password)
+                                    .addOnSuccessListener { authResult ->
+                                        val profileUpdates = com.google.firebase.auth.userProfileChangeRequest {
+                                            displayName = name
+                                        }
+                                        authResult.user?.updateProfile(profileUpdates)?.addOnCompleteListener { task ->
+                                            isLoading = false
+                                            if (task.isSuccessful) {
+                                                authManager.saveUserToFirestore()
+                                                onLoginSuccess()
+                                            }
+                                        }
+                                    }
+                                    .addOnFailureListener { exception ->
+                                        isLoading = false
+                                        Toast.makeText(context, "Грешка: ${exception.localizedMessage}", Toast.LENGTH_LONG).show()
+                                    }
+                            } else {
+                                Toast.makeText(context, "Ве молиме пополнете ги сите полиња!", Toast.LENGTH_SHORT).show()
+                            }
                         } else {
-                            errorMessage =
-                                authManager.getErrorMessage(exception as? Exception, context)
+                            if (email.isNotBlank() && password.isNotBlank()) {
+                                isLoading = true
+                                auth.signInWithEmailAndPassword(email, password)
+                                    .addOnSuccessListener {
+                                        isLoading = false
+                                        onLoginSuccess()
+                                    }
+                                    .addOnFailureListener { exception ->
+                                        isLoading = false
+                                        Toast.makeText(context, "Неуспешна најава: ${exception.localizedMessage}", Toast.LENGTH_LONG).show()
+                                    }
+                            } else {
+                                Toast.makeText(context, "Пополнете емаил и лозинка!", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(text = if (isRegistering) "Регистрирај се" else "Најави се", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            if (!isRegistering) {
+                Spacer(modifier = Modifier.height(20.dp))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color.LightGray)
+                    Text(" ИЛИ ", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp))
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color.LightGray)
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Твојата компонента со подесени кликови
+                SocialLoginButtons(
+                    onGoogleClick = {
+                        isLoading = true
+                        // Го стартуваме Google прозорецот со помош на клиентот од твојот AuthManager
+                        val signInIntent = authManager.getGoogleSignInClient().signInIntent
+                        googleSignInLauncher.launch(signInIntent)
+                    },
+                    onFacebookClick = {
+                        // Повикување на твојот Facebook Login
+                        authManager.handleFacebookLogin { success, error ->
+                            if (success) {
+                                authManager.saveUserToFirestore()
+                                onLoginSuccess()
+                            } else {
+                                Toast.makeText(context, "Facebook грешка: $error", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
+                )
 
-                    if (isRegistering) {
-                        authManager.signUpWithEmail(email, password, onAuthResult)
-                    } else {
-                        authManager.signInWithEmail(email, password, onAuthResult)
-                    }
-                },
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Копче за анонимно најавување (Гост)
+                TextButton(
+                    onClick = {
+                        isLoading = true
+                        authManager.signInAnonymously { success ->
+                            isLoading = false
+                            if (success) {
+                                authManager.saveUserToFirestore() // Ќе го зачува како "Гостин" благодарение на твојот убав услов во AuthManager
+                                onLoginSuccess()
+                            } else {
+                                Toast.makeText(context, "Неуспешно најавување како гост", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Продолжи како гост (Анонимно)", color = EmeraldPrimary, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = if (isRegistering) "Веќе имате акаунт? Најавете се" else "Немате акаунт? Креирајте го тука",
+                color = Color.Gray,
+                fontSize = 14.sp,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
-                enabled = email.isNotEmpty() && password.isNotEmpty()
-            ) {
-                Text(if (isRegistering) stringResource(R.string.btn_register) else stringResource(R.string.btn_login))
-            }
-
-            TextButton(onClick = { isRegistering = !isRegistering }) {
-                Text(if (isRegistering) stringResource(R.string.text_have_account) else stringResource(R.string.text_no_account))
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // --- ЛИНИЈА ЗА ОДДЕЛУВАЊЕ ---
-            Text(stringResource(R.string.text_or_continue), color = Color.Gray, fontSize = 12.sp)
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // --- СОЦИЈАЛНИ МРЕЖИ (Веќе средени) ---
-            SocialLoginButtons(
-                onGoogleClick = {
-                    val signInIntent = authManager.getGoogleSignInClient().signInIntent
-                    launcher.launch(signInIntent)
-                },
-                onFacebookClick = {
-                    // Овде оди Facebook логиката кога ќе ја средиш
-                    Log.d("Auth", "Facebook кликнато")
-                }
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // --- АНОНИМНА НАЈАВА ---
-            TextButton(
-                onClick = {
-                    authManager.signInAnonymously { success ->
-                        if (success) onLoginSuccess()
+                    .clickable {
+                        isRegistering = !isRegistering
+                        name = ""; email = ""; password = ""
                     }
-                }
-            ) {
-                Text(stringResource(R.string.btn_guest), color = SlateSecondary, textDecoration = TextDecoration.Underline)
-            }
+                    .padding(8.dp),
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
@@ -231,41 +283,27 @@ fun SocialLoginButtons(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Google Копче
         OutlinedButton(
             onClick = onGoogleClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(16.dp),
             border = BorderStroke(1.dp, Color.LightGray)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(
-                    painter = painterResource(id = R.drawable.google_logo),
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp)
-                )
+                Image(painter = painterResource(id = R.drawable.google_logo), contentDescription = null, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(12.dp))
                 Text("Продолжи со Google", color = Color.Black)
             }
         }
 
-        // Facebook Копче
         Button(
             onClick = onFacebookClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1877F2))
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(
-                    painter = painterResource(id = R.drawable.facebook_logo),
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp)
-                )
+                Image(painter = painterResource(id = R.drawable.facebook_logo), contentDescription = null, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(12.dp))
                 Text("Продолжи со Facebook", color = Color.White)
             }

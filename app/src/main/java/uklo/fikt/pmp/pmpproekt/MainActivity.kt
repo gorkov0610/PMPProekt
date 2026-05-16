@@ -3,7 +3,6 @@ package uklo.fikt.pmp.pmpproekt
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -19,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,6 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,8 +51,10 @@ import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
 import uklo.fikt.pmp.pmpproekt.data.Screen
@@ -70,7 +73,7 @@ class MainActivity : ComponentActivity() {
                 val authManager = remember { AuthManager(applicationContext) }
                 var user by remember { mutableStateOf(authManager.getCurrentUser()) }
                 if(user == null){
-                    LoginScreen(onLoginSuccess = {
+                    LoginScreen(authManager = authManager, onLoginSuccess = {
                         user = null
                         user = authManager.getCurrentUser()
                     })
@@ -101,15 +104,68 @@ fun MainContent(email : String, onLogout : () -> Unit){
     val currentRoute = navBackStackEntry?.destination?.route
 
     var showDialog by remember { mutableStateOf(false) }
+    val currentUser = remember(authManager) { authManager.getCurrentUser() }
+    val currentUserId = currentUser?.uid ?: ""
+
+    LaunchedEffect(currentUserId) {
+        if (currentUserId.isNotEmpty()) {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            Log.d("GLOBAL_FCM", "Слушателот е активен во MainContent за корисник: $currentUserId")
+
+            db.collectionGroup("messages")
+                .whereEqualTo("receiverId", currentUserId)
+                .addSnapshotListener { snapshots, e ->
+                    if (e != null) {
+                        Log.e("GLOBAL_FCM", "Грешка при слушање", e)
+                        return@addSnapshotListener
+                    }
+
+                    snapshots?.documentChanges?.forEach { change ->
+                        // КЛУЧНО: Слушај САМО за документи кои се додадени во базата ОД СЕГА ПА НАГОРЕ (додека си на апликацијата)
+                        if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                            val doc = change.document
+                            val senderId = doc.getString("senderId") ?: ""
+                            val text = doc.getString("text") ?: "Нова порака."
+                            val senderName = doc.getString("senderName") ?: "Некој"
+
+                            // Само ако пораката е од друг корисник
+                            if (senderId != currentUserId) {
+                                showLocalNotification(
+                                    context = context,
+                                    title = "Нова порака од $senderName 💬",
+                                    message = text,
+                                    senderId = senderId,      // Го праќаме ID-то на тој што ни пишал за да знае каде да нè врати
+                                    senderName = senderName   // Го праќаме името
+                                )
+                            }
+                        }
+                    }
+                }
+        }
+    }
     Scaffold(
         topBar = {
-            if(currentRoute == Screen.Feed.route) { // Користи ја константата ако ја имаш
+            if(currentRoute == Screen.Feed.route) {
                 TopAppBar(
                     title = { Text(stringResource(R.string.app_name), color = Color.White) },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
                     actions = {
+                        // 1. ИКОНА ЗА ПРОФИЛ
+                        IconButton(onClick = { navController.navigate("profile") }) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = "Профил",
+                                tint = Color.White
+                            )
+                        }
+
+                        // 2. ИКОНА ЗА ОДЈАВА (веќе ја имаш)
                         IconButton(onClick = onLogout) {
-                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = Color.White)
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                contentDescription = "Одјава",
+                                tint = Color.White
+                            )
                         }
                     }
                 )
@@ -131,31 +187,47 @@ fun MainContent(email : String, onLogout : () -> Unit){
         // ТУКА БЕШЕ ГРЕШКАТА - НЕ ДЕФИНИРАЈ НОВ navController ТУКА
         Box(modifier = Modifier.padding(padding).fillMaxSize().background(BackgroundGray)) {
 
-            NavHost(navController, Screen.Feed.route){
-                composable(Screen.Feed.route){
+            NavHost(navController, Screen.Feed.route) {
+                composable(Screen.Feed.route) {
                     SkillFeed(
                         dbManager,
+                        authManager,
                         onChatClick = { skill ->
                             val encodeName = Uri.encode(skill.authorName)
-                            // Сега ова ќе ја ажурира состојбата на главниот navController
-                            navController.navigate("chat/${skill.id}/$encodeName")
+                            // Го праќаме authorId (кој е примач) и името
+                            navController.navigate("chat/${skill.authorId}/$encodeName")
                         })
                 }
+                composable("profile") {
+                    ProfileScreen(
+                        authManager = authManager,
+                        onBack = { navController.popBackStack() },
+                        onLogout = {
+                            authManager.signOut()
+                            // Ресетирај го корисникот во MainActivity за да се врати на Login
+                            onLogout()
+                        }
+                    )
+                }
                 composable(
-                    route = "chat/{skillId}/{authorName}",
+                    route = "chat/{receiverId}/{authorName}",
                     arguments = listOf(
-                        navArgument("skillId") { type = NavType.StringType },
+                        navArgument("receiverId") { type = NavType.StringType },
                         navArgument("authorName") { type = NavType.StringType }
+                    ),
+                    // ДОДАЈ ГО ОВА ПАРЧЕ КОД ТУКА:
+                    deepLinks = listOf(
+                        navDeepLink { uriPattern = "skillswap://chat/{receiverId}/{authorName}" }
                     )
                 ) { backStackEntry ->
-                    val skillId = backStackEntry.arguments?.getString("skillId") ?: ""
+                    val receiverId = backStackEntry.arguments?.getString("receiverId") ?: ""
                     val authorName = backStackEntry.arguments?.getString("authorName") ?: ""
 
                     ChatScreen(
-                        skillId = skillId,
-                        dbManager = dbManager,
-                        authorName = authorName,
+                        receiverId = receiverId,
+                        receiverName = authorName,
                         authManager = authManager,
+                        dbManager,
                         onBack = { navController.popBackStack() }
                     )
                 }
@@ -238,11 +310,13 @@ fun MainContent(email : String, onLogout : () -> Unit){
                     colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
                     onClick = {
                         if (title.isNotBlank()) {
+                            val currentUser = authManager.getCurrentUser() // Земи го моменталниот корисник
                             val newSkill = Skill(
+                                id = java.util.UUID.randomUUID().toString(), // Генерирај уникатно ID за огласот
                                 title = title,
                                 description = desc,
-                                authorName = authManager.getCurrentUser()?.displayName
-                                    ?: defaultUsername,
+                                authorId = currentUser?.uid ?: "", // ОВА Е КЛУЧНОТО ШТО ФАЛЕШЕ
+                                authorName = currentUser?.displayName ?: defaultUsername,
                                 contactEmail = email,
                                 category = selectedCategoryItem.id
                             )

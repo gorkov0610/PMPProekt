@@ -11,6 +11,8 @@ data class Skill(
     val description : String = "",
     val category : String = "",
     val authorName : String = "",
+    val authorId : String = "",
     val contactEmail : String = "",
-    val isFavorite : Boolean = false
+    val likesCount : Int = 0,
+    val likedBy : List<String> = emptyList()
 )
