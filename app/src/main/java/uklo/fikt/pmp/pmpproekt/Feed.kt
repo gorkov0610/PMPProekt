@@ -20,9 +20,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,7 +32,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import uklo.fikt.pmp.pmpproekt.data.AppDatabase
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
+import uklo.fikt.pmp.pmpproekt.data.CachedSkill
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
 import uklo.fikt.pmp.pmpproekt.data.Skill
 
@@ -38,22 +44,22 @@ data class CategoryItem(
     val id: String,
     val nameRes: Int
 )
+
 class PreferenceManager(context: Context) {
     private val sharedPreferences = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
 
-    // Зголеми го бројот на кликови за одредена категорија
     fun trackInterest(categoryId: String) {
         if (categoryId == "ALL") return
         val currentCount = sharedPreferences.getInt(categoryId, 0)
         sharedPreferences.edit { putInt(categoryId, currentCount + 1) }
     }
 
-    // Најди ја категоријата со најмногу кликови
     fun getMostInterestedCategory(): String {
         val categories = listOf("MUSIC", "TECH", "LANG", "SPORTS", "GENERAL")
         return categories.maxByOrNull { sharedPreferences.getInt(it, 0) } ?: "ALL"
     }
 }
+
 @Composable
 fun SkillFeed(
     dbManager: DatabaseManager,
@@ -73,16 +79,58 @@ fun SkillFeed(
     val currentUser = authManager.getCurrentUser()
     val currentUserId = currentUser?.uid ?: ""
 
-    var skills by remember { mutableStateOf(listOf<Skill>()) }
+    // 1. Иницијализација на Room базата
+    val database = remember { AppDatabase.getDatabase(context) }
+    val skillDao = remember { database.skillDao() }
+
+    // Специјален скоп за корутини за запишување во базата во позадина
+    val coroutineScope = rememberCoroutineScope()
+
+    // Слушање на Room базата во реално време (UI чита оттука)
+    val cachedSkillsList by skillDao.getAllSkills().collectAsState(initial = emptyList())
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("ALL") }
 
+    // 2. Позадинска синхронизација: Firestore -> Room
     LaunchedEffect(Unit) {
         dbManager.getSkills { fetchedSkills ->
-            skills = fetchedSkills
+            // Кога ќе стигнат новите вештини од Firestore, ги пакуваме за Room во IO нишка
+            coroutineScope.launch(Dispatchers.IO) {
+                val roomSkills = fetchedSkills.map { skill ->
+                    CachedSkill(
+                        id = skill.id,
+                        title = skill.title,
+                        description = skill.description,
+                        category = skill.category,
+                        authorName = skill.authorName,
+                        authorId = skill.authorId,
+                        contactEmail = skill.contactEmail,
+                        likesCount = skill.likesCount
+                    )
+                }
+                skillDao.clearAll()         // Ги чистиме старите
+                skillDao.insertSkills(roomSkills) // Ги внесуваме новите
+            }
         }
     }
 
+    // 3. Конвертирање на кешираните Room објекти назад во Skill објекти за да пасуваат во AdvancedSkillCard
+    val skills = cachedSkillsList.map { cached ->
+        Skill(
+            id = cached.id,
+            title = cached.title,
+            description = cached.description,
+            category = cached.category,
+            authorName = cached.authorName,
+            authorId = cached.authorId,
+            contactEmail = cached.contactEmail,
+            likesCount = cached.likesCount,
+            likedBy = emptyList() // Ова поле не го кешираме во Room, доволно ни е likesCount
+        )
+    }
+
+    // Филтрирањето останува потполно исто, но сега работи над преточената листа од Room
     val filteredSkills = skills.filter { skill ->
         val matchesSearch = skill.title.contains(searchQuery, ignoreCase = true)
         val matchesCategory = if (selectedCategory == "ALL") {
@@ -140,19 +188,15 @@ fun SkillFeed(
             LazyColumn(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // ПОПРАВЕНО: Сега ја користиме точната филтрирана листа filteredSkills
                 items(filteredSkills) { currentSkill ->
                     AdvancedSkillCard(
                         skill = currentSkill,
                         currentUserId = currentUserId,
                         onLikeClick = {
-                            // Имплементација на реално време лајкови и нотификации
                             toggleLikeSkill(currentSkill, currentUserId, com.google.firebase.firestore.FirebaseFirestore.getInstance(), context)
                         },
                         onChatClick = {
-                            // Безбедносна заштита: Корисникот не смее да отвори чет сам со себе
                             if (currentSkill.authorId != currentUserId) {
-                                // ПОПРАВЕНО: Го активираме кликот кој преку навигацијата ќе не однесе во ChatScreen
                                 onChatClick(currentSkill)
                             } else {
                                 android.widget.Toast.makeText(context, "Ова е твоја вештина!", android.widget.Toast.LENGTH_SHORT).show()

@@ -9,15 +9,12 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SkillDao {
-    @Query("SELECT * FROM skills")
-    fun getAllSkills() : Flow<List<Skill>>
+    @Query("SELECT * FROM cached_skills")
+    fun getAllSkills(): Flow<List<CachedSkill>> // Преку Flow, Compose веднаш ќе ги црта промените
 
-    @Insert(onConflict = OnConflictStrategy.Companion.REPLACE)
-    suspend fun insertSkill(skill: Skill)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) // Ако веќе постои Skill со тоа ID, го пребришува со најновиот од Firebase
+    suspend fun insertSkills(skills: List<CachedSkill>)
 
-    @Delete
-    suspend fun deleteSkill(skill: Skill)
-
-    @Query("SELECT * FROM skills WHERE isFavorite = 1")
-    fun getFavoriteSkills() : Flow<List<Skill>>
+    @Query("DELETE FROM cached_skills")
+    suspend fun clearAll()
 }

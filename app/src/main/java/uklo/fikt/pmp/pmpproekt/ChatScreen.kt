@@ -1,5 +1,6 @@
 package uklo.fikt.pmp.pmpproekt
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.google.firebase.firestore.FirebaseFirestore
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
 import uklo.fikt.pmp.pmpproekt.data.Message
@@ -102,7 +104,8 @@ fun ChatScreen(
 ) {
     val currentUser = authManager.getCurrentUser()
     val currentUserId = currentUser?.uid ?: ""
-    val currentUserName = currentUser?.displayName ?: "Корисник"
+    var currentUserName by remember { mutableStateOf("Вчитавање...") }
+    var realReceiverName by remember { mutableStateOf(receiverName) }
     val context = LocalContext.current
 
     var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
@@ -113,21 +116,40 @@ fun ChatScreen(
         if (currentUserId < receiverId) "${currentUserId}_${receiverId}" else "${receiverId}_${currentUserId}"
     }
     var isFirstLoad by remember { mutableStateOf(true) }
-    // Слушање за нови пораки преку DatabaseManager во реално време (Внатре во ChatScreen)
+
     LaunchedEffect(chatRoomId) {
         databaseManager.listenForMessages(chatRoomId) { updatedMessages ->
-            // Само ги ажурираме пораките за да се нацртаат во LazyColumn-от на екранот
             messages = updatedMessages
+            Log.d("ChatScreen", "Успешно вчитани ${updatedMessages.size} пораки во реално време!")
+        }
+    }
 
-            // Ова веќе не ни треба за нотификации, но ако ти зависи друга UI логика од него, можеш да го оставиш:
-            isFirstLoad = false
+    LaunchedEffect(currentUserId, receiverId) {
+        val db = FirebaseFirestore.getInstance()
+
+        if (currentUserId.isNotEmpty()) {
+            db.collection("users").document(currentUserId).get()
+                .addOnSuccessListener { document ->
+                    if (document != null && document.exists()) {
+                        currentUserName = document.getString("name") ?: document.getString("username") ?: "Корисник"
+                    }
+                }
+        }
+
+        if (receiverId.isNotEmpty()) {
+            db.collection("users").document(receiverId).get()
+                .addOnSuccessListener { document ->
+                    if (document != null && document.exists()) {
+                        realReceiverName = document.getString("name") ?: document.getString("username") ?: receiverName
+                    }
+                }
         }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         // Наслов со името на примачот
         Text(
-            text = "Разговор со $receiverName",
+            text = "Разговор со $realReceiverName",
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 16.dp)
@@ -175,7 +197,7 @@ fun ChatScreen(
                         databaseManager.sendMessage(
                             chatRoomId = chatRoomId,
                             message = newMessage,
-                            receiverName = receiverName,
+                            receiverName = realReceiverName,
                             currentUserName = currentUserName
                         )
 

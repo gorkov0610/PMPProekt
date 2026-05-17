@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.google.devtools.ksp)
     alias(libs.plugins.kotlin.compose)
     id("com.google.gms.google-services")
 }
@@ -28,18 +29,35 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+
     }
     buildFeatures {
         compose = true
     }
+    sourceSets {
+        getByName("main") {
+            java.srcDirs("build/generated/ksp/main/java", "build/generated/ksp/main/kotlin")
+        }
+        getByName("debug") {
+            java.srcDirs("build/generated/ksp/debug/java", "build/generated/ksp/debug/kotlin")
+        }
+    }
 }
-
+kotlin {
+    jvmToolchain(17)
+    sourceSets.all {
+        languageSettings.optIn("androidx.media3.common.util.UnstableApi")
+    }
+}
 dependencies {
     //room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.media3.common.ktx)
+    ksp(libs.androidx.room.compiler)
 
     //Firebase
     implementation(platform(libs.firebase.bom))
@@ -63,12 +81,7 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.material3)
-    implementation(libs.androidx.media3.common.ktx)
-    implementation(libs.androidx.compose.foundation)
-    implementation(libs.androidx.navigation.compose)
-    implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.coil.compose)
-    implementation(libs.androidx.compose.runtime)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

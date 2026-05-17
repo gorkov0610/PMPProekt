@@ -41,6 +41,11 @@
                 <data android:scheme="@string/fb_login_protocol_scheme" />
             </intent-filter>
         </activity>
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            android:exported="false"
+            android:initOrder="100" />
         <service
             android:name=".MyFirebaseMessagingService"
             android:exported="false">

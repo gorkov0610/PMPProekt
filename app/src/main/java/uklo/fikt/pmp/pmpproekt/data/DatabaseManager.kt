@@ -43,11 +43,7 @@ class DatabaseManager {
         }
     }
 
-    // ==========================================
-    // СРЕДЕНА И УСОГЛАСЕНА ЛОГИКА ЗА ПОРАКИ И ЧЕТ
-    // ==========================================
 
-    // Праќање порака во заедничка соба + активирање нотификација преку Firestore
     fun sendMessage(chatRoomId: String, message: Message, receiverName: String, currentUserName: String) {
         // 1. Ја зачувуваме пораката во колекцијата messages во самата соба
         db.collection("chats")

@@ -16,8 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -47,7 +47,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
-import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -66,20 +65,23 @@ import uklo.fikt.pmp.pmpproekt.ui.theme.PMPProektTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
         setContent {
             PMPProektTheme {
                 val authManager = remember { AuthManager(applicationContext) }
                 var user by remember { mutableStateOf(authManager.getCurrentUser()) }
+
                 if(user == null){
                     LoginScreen(authManager = authManager, onLoginSuccess = {
-                        user = null
                         user = authManager.getCurrentUser()
                     })
                 } else {
                     MainContent(
-                        email = user?.email?: stringResource(R.string.user),
+                        email = user?.email ?: stringResource(R.string.user),
                         onLogout = {
                             authManager.signOut()
                             user = null
@@ -91,7 +93,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainContent(email : String, onLogout : () -> Unit){
@@ -110,34 +111,44 @@ fun MainContent(email : String, onLogout : () -> Unit){
     LaunchedEffect(currentUserId) {
         if (currentUserId.isNotEmpty()) {
             val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-            Log.d("GLOBAL_FCM", "Слушателот е активен во MainContent за корисник: $currentUserId")
+            Log.d("GLOBAL_FCM", "Активиран нов прецизен слушател за: $currentUserId")
 
             db.collectionGroup("messages")
                 .whereEqualTo("receiverId", currentUserId)
-                .addSnapshotListener { snapshots, e ->
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(1) // Го земаме САМО последниот документ што се појавил во базата
+                .addSnapshotListener { snapshot, e ->
                     if (e != null) {
                         Log.e("GLOBAL_FCM", "Грешка при слушање", e)
                         return@addSnapshotListener
                     }
 
-                    snapshots?.documentChanges?.forEach { change ->
-                        // КЛУЧНО: Слушај САМО за документи кои се додадени во базата ОД СЕГА ПА НАГОРЕ (додека си на апликацијата)
-                        if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
-                            val doc = change.document
-                            val senderId = doc.getString("senderId") ?: ""
-                            val text = doc.getString("text") ?: "Нова порака."
-                            val senderName = doc.getString("senderName") ?: "Некој"
+                    if (snapshot != null && !snapshot.isEmpty) {
+                        // Ја земаме најновата порака од серверот
+                        val latestDoc = snapshot.documents.first()
 
-                            // Само ако пораката е од друг корисник
-                            if (senderId != currentUserId) {
-                                showLocalNotification(
-                                    context = context,
-                                    title = "Нова порака од $senderName 💬",
-                                    message = text,
-                                    senderId = senderId,      // Го праќаме ID-то на тој што ни пишал за да знае каде да нè врати
-                                    senderName = senderName   // Го праќаме името
-                                )
-                            }
+                        // Земи го мета-податокот дали оваа промена доаѓа од локалниот кеш на уредот што ја ПРАТИЛ
+                        // или патувала преку серверот до примачот (Уред 2).
+                        val isFromCache = snapshot.metadata.isFromCache
+
+                        val senderId = latestDoc.getString("senderId") ?: ""
+                        val text = latestDoc.getString("text") ?: "Нова порака."
+                        val senderName = latestDoc.getString("senderName") ?: "Некој"
+
+                        Log.d("GLOBAL_FCM", "Фатена последна порака: '$text' (Кеш: $isFromCache)")
+
+                        // ПУШТАМЕ НОТИФИКАЦИЈА САМО:
+                        // 1. Ако пораката НЕ е од нас самите
+                        // 2. Ако податокот доаѓа свеж од серверот (isFromCache == false), со што се избегнуваат старите кеширани пораки при палење на апликацијата
+                        if (senderId != currentUserId && !isFromCache) {
+                            Log.d("GLOBAL_FCM", "УСПЕШНО СТИГНАА ПОДАТОЦИТЕ! Скока нотификација...")
+                            showLocalNotification(
+                                context = context,
+                                title = "Нова порака од $senderName 💬",
+                                message = text,
+                                senderId = senderId,
+                                senderName = senderName
+                            )
                         }
                     }
                 }
@@ -159,11 +170,10 @@ fun MainContent(email : String, onLogout : () -> Unit){
                             )
                         }
 
-                        // 2. ИКОНА ЗА ОДЈАВА (веќе ја имаш)
-                        IconButton(onClick = onLogout) {
+                        IconButton(onClick = { navController.navigate("inbox") }) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                contentDescription = "Одјава",
+                                imageVector = Icons.Default.Email, // или Mail/Chat_bubble
+                                contentDescription = "Inbox",
                                 tint = Color.White
                             )
                         }
@@ -172,7 +182,6 @@ fun MainContent(email : String, onLogout : () -> Unit){
             }
         },
         floatingActionButton = {
-            // И ПЛУСОТ ТРГНИ ГО ОД ЧЕТОТ
             if (currentRoute == Screen.Feed.route) {
                 FloatingActionButton(
                     onClick = { showDialog = true },
@@ -188,6 +197,7 @@ fun MainContent(email : String, onLogout : () -> Unit){
         Box(modifier = Modifier.padding(padding).fillMaxSize().background(BackgroundGray)) {
 
             NavHost(navController, Screen.Feed.route) {
+
                 composable(Screen.Feed.route) {
                     SkillFeed(
                         dbManager,
@@ -197,6 +207,16 @@ fun MainContent(email : String, onLogout : () -> Unit){
                             // Го праќаме authorId (кој е примач) и името
                             navController.navigate("chat/${skill.authorId}/$encodeName")
                         })
+                }
+                composable("inbox") {
+                    InboxScreen(
+                        authManager = authManager,
+                        onChatClick = { receiverId, name ->
+                            val encodeName = Uri.encode(name)
+                            // Кога ќе кликнеш на некој разговор во Inbox, те носи директно во ChatScreen
+                            navController.navigate("chat/$receiverId/$encodeName")
+                        }
+                    )
                 }
                 composable("profile") {
                     ProfileScreen(
@@ -310,24 +330,54 @@ fun MainContent(email : String, onLogout : () -> Unit){
                     colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
                     onClick = {
                         if (title.isNotBlank()) {
-                            val currentUser = authManager.getCurrentUser() // Земи го моменталниот корисник
-                            val newSkill = Skill(
-                                id = java.util.UUID.randomUUID().toString(), // Генерирај уникатно ID за огласот
-                                title = title,
-                                description = desc,
-                                authorId = currentUser?.uid ?: "", // ОВА Е КЛУЧНОТО ШТО ФАЛЕШЕ
-                                authorName = currentUser?.displayName ?: defaultUsername,
-                                contactEmail = email,
-                                category = selectedCategoryItem.id
-                            )
-                            dbManager.saveSkill(newSkill) { success ->
-                                if (success) {
-                                    Log.d("SkillSwap", "Успешно запишување")
-                                    showDialog = false
-                                }else{
-                                    Log.d("SkillSwap", "Неуспешно запишување")
+                            val currentUser = authManager.getCurrentUser()
+                            val currentUserId = currentUser?.uid ?: ""
+
+                            // 1. Пристапуваме до Firestore за да го земеме вистинското име од профилот
+                            val firestoreDb = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            firestoreDb.collection("users").document(currentUserId).get()
+                                .addOnSuccessListener { document ->
+                                    // Го бараме полето "name" или "username" во неговиот профил
+                                    val actualName = if (document != null && document.exists()) {
+                                        document.getString("name") ?: document.getString("username") ?: defaultUsername
+                                    } else {
+                                        currentUser?.displayName ?: defaultUsername
+                                    }
+
+                                    // 2. ДУРИ СЕГА го креираме огласот со вистинското име
+                                    val newSkill = Skill(
+                                        id = java.util.UUID.randomUUID().toString(),
+                                        title = title,
+                                        description = desc,
+                                        authorId = currentUserId,
+                                        authorName = actualName, // ТУКА ОДИ ВИСТИНСКОТО ИМЕ!
+                                        contactEmail = email,
+                                        category = selectedCategoryItem.id
+                                    )
+
+                                    // 3. Го зачувуваме огласот во базата
+                                    dbManager.saveSkill(newSkill) { success ->
+                                        if (success) {
+                                            Log.d("SkillSwap", "Успешно запишување")
+                                            showDialog = false
+                                        } else {
+                                            Log.d("SkillSwap", "Неуспешно запишување")
+                                        }
+                                    }
                                 }
-                            }
+                                .addOnFailureListener {
+                                    // Безбедносна мрежа ако нема интернет или ја нема колекцијата
+                                    val newSkill = Skill(
+                                        id = java.util.UUID.randomUUID().toString(),
+                                        title = title,
+                                        description = desc,
+                                        authorId = currentUserId,
+                                        authorName = currentUser?.displayName ?: defaultUsername,
+                                        contactEmail = email,
+                                        category = selectedCategoryItem.id
+                                    )
+                                    dbManager.saveSkill(newSkill) { showDialog = false }
+                                }
                         }
                     }
                 ) { Text(stringResource(R.string.publish_button)) }

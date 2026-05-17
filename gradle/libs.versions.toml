@@ -10,25 +10,29 @@ espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.13.0"
 kotlin = "2.0.0"
+kspVersion = "2.0.0-1.0.22"  # ДОДАДЕНО: Точна верзија на KSP за твојот Kotlin
 composeBom = "2026.02.01"
 material = "1.13.0"
 navigationCompose = "2.9.8"
 playServicesAuth = "21.5.1"
-roomVer = "2.8.4"
+roomVersion = "2.8.4"       # СРЕДЕНО: Една единствена верзија за Room
 uiGraphics = "1.11.1"
 material3 = "1.4.0"
 media3CommonKtx = "1.10.0"
 foundation = "1.11.1"
 foundationLayout = "1.11.1"
 runtime = "1.11.1"
-firebaseStorageKtx = "22.0.1"
+media3CommonKtxVersion = "1.10.1"
 
 [libraries]
 androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
-androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "roomVer" }
-androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "roomVer" }
+# СРЕДЕНО: Двете библиотеки сега ја користат истата roomVersion
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "roomVersion" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "roomVersion" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "roomVersion" }
+
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coilCompose" }
 facebook-android-sdk = { module = "com.facebook.android:facebook-android-sdk", version.ref = "facebookAndroidSdk" }
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
@@ -54,12 +58,10 @@ material = { module = "com.google.android.material:material", version.ref = "mat
 play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
 androidx-media3-common-ktx = { group = "androidx.media3", name = "media3-common-ktx", version.ref = "media3CommonKtx" }
-androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
-androidx-compose-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayout" }
-androidx-compose-runtime = { group = "androidx.compose.runtime", name = "runtime", version.ref = "runtime" }
-firebase-storage-ktx = { group = "com.google.firebase", name = "firebase-storage-ktx", version.ref = "firebaseStorageKtx" }
+media3-common-ktx = { group = "androidx.media3", name = "media3-common-ktx", version.ref = "media3CommonKtxVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "kspVersion" } # ДОДАДЕНО
