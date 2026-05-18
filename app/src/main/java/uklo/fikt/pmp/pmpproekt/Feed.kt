@@ -1,6 +1,8 @@
 package uklo.fikt.pmp.pmpproekt
 
 import android.content.Context
+import android.os.Bundle
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
+import com.google.firebase.analytics.FirebaseAnalytics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import uklo.fikt.pmp.pmpproekt.data.AppDatabase
@@ -50,13 +53,26 @@ class PreferenceManager(context: Context) {
 
     fun trackInterest(categoryId: String) {
         if (categoryId == "ALL") return
-        val currentCount = sharedPreferences.getInt(categoryId, 0)
-        sharedPreferences.edit { putInt(categoryId, currentCount + 1) }
+        val mapCategory = normalizeCategory(categoryId)
+        val currentCount = sharedPreferences.getInt(mapCategory, 0)
+        sharedPreferences.edit { putInt(mapCategory, currentCount + 1) }
     }
 
     fun getMostInterestedCategory(): String {
         val categories = listOf("MUSIC", "TECH", "LANG", "SPORTS", "GENERAL")
         return categories.maxByOrNull { sharedPreferences.getInt(it, 0) } ?: "ALL"
+    }
+
+    // Помошна функција за мапирање на македонските текстуални вредности од базата кон константите
+    fun normalizeCategory(rawCategory: String): String {
+        return when (rawCategory.uppercase()) {
+            "TECH", "ПРОГРАМИРАЊЕ" -> "TECH"
+            "MUSIC", "МУЗИКА" -> "MUSIC"
+            "LANG", "ЈАЗИЦИ" -> "LANG"
+            "SPORTS", "СПОРТ" -> "SPORTS"
+            "GENERAL", "ОПШТО" -> "GENERAL"
+            else -> "GENERAL"
+        }
     }
 }
 
@@ -76,26 +92,24 @@ fun SkillFeed(
     )
     val context = LocalContext.current
     val prefManager = remember { PreferenceManager(context) }
+    val analytics = remember { FirebaseAnalytics.getInstance(context) }
+
     val currentUser = authManager.getCurrentUser()
     val currentUserId = currentUser?.uid ?: ""
 
-    // 1. Иницијализација на Room базата
     val database = remember { AppDatabase.getDatabase(context) }
     val skillDao = remember { database.skillDao() }
-
-    // Специјален скоп за корутини за запишување во базата во позадина
     val coroutineScope = rememberCoroutineScope()
 
-    // Слушање на Room базата во реално време (UI чита оттука)
     val cachedSkillsList by skillDao.getAllSkills().collectAsState(initial = emptyList())
 
     var searchQuery by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("ALL") }
 
-    // 2. Позадинска синхронизација: Firestore -> Room
+    // ПАМЕТНО ПОСТАВУВАЊЕ: Се вчитава категоријата која корисникот највеќе ја набљудувал!
+    var selectedCategory by remember { mutableStateOf(prefManager.getMostInterestedCategory()) }
+
     LaunchedEffect(Unit) {
         dbManager.getSkills { fetchedSkills ->
-            // Кога ќе стигнат новите вештини од Firestore, ги пакуваме за Room во IO нишка
             coroutineScope.launch(Dispatchers.IO) {
                 val roomSkills = fetchedSkills.map { skill ->
                     CachedSkill(
@@ -109,13 +123,12 @@ fun SkillFeed(
                         likesCount = skill.likesCount
                     )
                 }
-                skillDao.clearAll()         // Ги чистиме старите
-                skillDao.insertSkills(roomSkills) // Ги внесуваме новите
+                skillDao.clearAll()
+                skillDao.insertSkills(roomSkills)
             }
         }
     }
 
-    // 3. Конвертирање на кешираните Room објекти назад во Skill објекти за да пасуваат во AdvancedSkillCard
     val skills = cachedSkillsList.map { cached ->
         Skill(
             id = cached.id,
@@ -126,11 +139,10 @@ fun SkillFeed(
             authorId = cached.authorId,
             contactEmail = cached.contactEmail,
             likesCount = cached.likesCount,
-            likedBy = emptyList() // Ова поле не го кешираме во Room, доволно ни е likesCount
+            likedBy = emptyList()
         )
     }
 
-    // Филтрирањето останува потполно исто, но сега работи над преточената листа од Room
     val filteredSkills = skills.filter { skill ->
         val matchesSearch = skill.title.contains(searchQuery, ignoreCase = true)
         val matchesCategory = if (selectedCategory == "ALL") {
@@ -171,6 +183,7 @@ fun SkillFeed(
                     selected = selectedCategory == item.id,
                     onClick = {
                         selectedCategory = item.id
+                        // Корисникот експлицитно менува филтер
                         prefManager.trackInterest(item.id)
                         dbManager.logSkillView("Filter_Category", item.id)
                     },
@@ -185,9 +198,7 @@ fun SkillFeed(
                 Text(text = stringResource(R.string.no_skills), color = Color.Gray)
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize()
-            ) {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(filteredSkills) { currentSkill ->
                     AdvancedSkillCard(
                         skill = currentSkill,
@@ -197,9 +208,22 @@ fun SkillFeed(
                         },
                         onChatClick = {
                             if (currentSkill.authorId != currentUserId) {
+                                // 1. Локално бележиме интерес за категоријата на овој оглас
+                                val mappedCat = prefManager.normalizeCategory(currentSkill.category)
+                                prefManager.trackInterest(mappedCat)
+
+                                // 2. Праќаме настан до Firebase Analytics дека е отворен ЧЕТ
+                                val bundle = Bundle().apply {
+                                    putString(FirebaseAnalytics.Param.ITEM_ID, currentSkill.id)
+                                    putString(FirebaseAnalytics.Param.ITEM_NAME, currentSkill.title)
+                                    putString(FirebaseAnalytics.Param.ITEM_CATEGORY, mappedCat)
+                                    putString("interaction_type", "CHAT_INITIATED")
+                                }
+                                analytics.logEvent(FirebaseAnalytics.Event.SELECT_ITEM, bundle)
+
                                 onChatClick(currentSkill)
                             } else {
-                                android.widget.Toast.makeText(context, "Ова е твоја вештина!", android.widget.Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Ова е твоја вештина!", Toast.LENGTH_SHORT).show()
                             }
                         }
                     )

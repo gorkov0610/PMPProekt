@@ -75,6 +75,11 @@ class MainActivity : ComponentActivity() {
                 val authManager = remember { AuthManager(applicationContext) }
                 var user by remember { mutableStateOf(authManager.getCurrentUser()) }
 
+                LaunchedEffect(user?.uid) {
+                    if(user?.uid != null){
+                        startLikesObserver(context = applicationContext, user!!.uid)
+                    }
+                }
                 if(user == null){
                     LoginScreen(authManager = authManager, onLoginSuccess = {
                         user = authManager.getCurrentUser()
