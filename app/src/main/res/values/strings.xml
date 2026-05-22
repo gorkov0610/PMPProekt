@@ -1,7 +1,9 @@
 <resources>
     <string name="app_name">SkillSwap</string>
+    <string name="welcome_back">Добредојде назад</string>
+    <string name="create_account">Креирај сметка</string>
     <string name="default_web_client_id">941348525636-ucao2pm71q7nlthukcpj9148m1120ibe.apps.googleusercontent.com</string>
-    <string name="search_hint">Пребарај вештина или категорија...</string>
+    <string name="search_hint">Пребарај вештина или категорија…</string>
     <string name="signin_google">Продолжи со Google</string>
     <string name="signin_fb">Продолжи со Facebook</string>
     <string name="slogan">Размени знаење, изгради иднина</string>
@@ -24,11 +26,12 @@
     <string name="email_body">Здраво %1$s, заинтересиран сум за твојата вештина објавена на SkillSwap.</string>
     <string name="no_email_client">Нема апликација за е-пошта</string>
     <string name="chat_with">Разговор со</string>
-    <string name="type_message">Напиши порака...</string>
+    <string name="type_message">Напиши порака…</string>
     <string name="open_chat">Отвори разговор</string>
     <string name="me">Јас</string>
     <string name="label_email">Е-пошта</string>
     <string name="label_password">Лозинка</string>
+    <string name="label_username">Корисничко име</string>
     <string name="btn_login">Најави се</string>
     <string name="btn_register">Креирај профил</string>
     <string name="text_no_account">Немаш профил? Регистрирај се</string>
@@ -44,7 +47,13 @@
     <string name="error_network">Проблем со мрежата. Проверете ја врската.</string>
     <string name="error_unknown">Се случи грешка. Обидете се подоцна.</string>
     <string name="error_user_collision">Оваа е-пошта веќе се користи.</string>
-    <string name="error_empty_field">Внесете е-маил и лозинка.</string>
+    <string name="error_empty_field">Пополнете ги сите полиња</string>
+    <string name="error">Грешка: </string>
+    <string name="error_login">Неуспешна најава: </string>
+    <string name="error_fb">Facebook грешка: </string>
+    <string name="error_guest">Неуспешна најава како гостин</string>
+    <string name="error_google_token">Не е пронајден Google токен</string>
+    <string name="error_firebase">Грешка при Firebase најава</string>
     <string name="facebook_app_id">123456789012345</string>
     <string name="fb_login_protocol_scheme">fb123456789012345</string>
     <string name="facebook_client_token">1234567890abcdef1234567890abcdef</string>

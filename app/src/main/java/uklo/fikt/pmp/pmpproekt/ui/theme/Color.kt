@@ -12,3 +12,4 @@ val SlateDark = Color(0xFF263238)
 val AmberAccent = Color(0xFFFFC107)
 
 val BackgroundGray = Color(0xFFF8F9FA)
+val White = Color.White

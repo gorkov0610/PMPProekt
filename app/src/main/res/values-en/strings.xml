@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SkillSwap</string>
-    <string name="search_hint">Search skills or categories...</string>
+    <string name="welcome_back">Welcome back</string>
+    <string name="create_account">Create an account</string>
+    <string name="search_hint">Search skills or categories…</string>
     <string name="slogan">Exchange knowledge, build your future</string>
     <string name="signin_google">Sign in with Google</string>
     <string name="signin_fb">Sign in with Facebook</string>
@@ -24,11 +26,12 @@
     <string name="email_body">Hi %1$s, I am interested in your skill posted on SkillSwap.</string>
     <string name="no_email_client">No email app found</string>
     <string name="chat_with">Chat with</string>
-    <string name="type_message">Type a message...</string>
+    <string name="type_message">Type a message…</string>
     <string name="open_chat">Open chat</string>
     <string name="me">Me</string>
     <string name="label_email">E-mail</string>
     <string name="label_password">Password</string>
+    <string name="label_username">Username</string>
     <string name="btn_login">Log in</string>
     <string name="btn_register">Create profile</string>
     <string name="text_no_account">Don\'t have an account? Register</string>
@@ -45,6 +48,12 @@
     <string name="error_unknown">Something happened. Please try again later</string>
     <string name="error_user_collision">This email is already in use.</string>
     <string name="error_empty_field">Please enter e-mail and password.</string>
+    <string name="error">Error: </string>
+    <string name="error_login">Unsuccessful login: </string>
+    <string name="error_fb">Facebook error: </string>
+    <string name="error_guest">Unsuccessful login as a guest</string>
+    <string name="error_google_token">Google token not found</string>
+    <string name="error_firebase">Firebase error</string>
     <string name="facebook_app_id">123456789012345</string>
     <string name="fb_login_protocol_scheme">fb123456789012345</string>
     <string name="facebook_client_token">1234567890abcdef1234567890abcdef</string>
