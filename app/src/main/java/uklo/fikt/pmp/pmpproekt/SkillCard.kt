@@ -1,32 +1,61 @@
 package uklo.fikt.pmp.pmpproekt
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import uklo.fikt.pmp.pmpproekt.data.Skill
+import uklo.fikt.pmp.pmpproekt.ui.theme.BackgroundGray
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
+import uklo.fikt.pmp.pmpproekt.ui.theme.RedCoral
+import uklo.fikt.pmp.pmpproekt.ui.theme.SlateSecondary
 
 @Composable
 fun AdvancedSkillCard(
     skill: Skill,
-    currentUserId: String,
     onLikeClick: () -> Unit,
     onChatClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val isLiked = skill.likedBy.contains(currentUserId)
+
+    val prefManager = remember { PreferenceManager(context) }
+
+    var isLikedByMe by remember(skill.id) { mutableStateOf(prefManager.isSkillLiked(skill.id)) }
+
+    val displayLikesCount = remember(skill.id) { mutableIntStateOf(skill.likesCount) }
+
 
     Card(
         modifier = Modifier
@@ -52,17 +81,19 @@ fun AdvancedSkillCard(
                 color = Color.DarkGray,
                 modifier = Modifier.padding(top = 4.dp)
             )
-
+            val translatedCategory = remember(skill.category){
+                getCategoryTranslation(skill.category, context)
+            }
             // Мета податоци
             Text(
-                text = "Категорија: ${skill.category} • Автор: ${skill.authorName}",
+                text = stringResource(R.string.skill_metadata, skill.authorName, translatedCategory),
                 fontSize = 12.sp,
                 color = Color.Gray,
                 modifier = Modifier.padding(top = 6.dp)
             )
 
             Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider(color = Color(0xFFEEEEEE))
+            HorizontalDivider(color = BackgroundGray)
 
             // ДОЛНА ЛЕНТА СО КОПЧИЊА ЗА АКЦИЈА
             Row(
@@ -72,18 +103,32 @@ fun AdvancedSkillCard(
             ) {
                 // ЛЕВО: Срце и број на лајкови
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onLikeClick) {
+                    IconButton(
+                        onClick = {
+                            val nextLikedState = !isLikedByMe
+                            prefManager.setSkillLiked(skill.id, nextLikedState)
+                            isLikedByMe = nextLikedState
+
+                            if (nextLikedState) {
+                                displayLikesCount.intValue = skill.likesCount + 1
+                            } else {
+                                displayLikesCount.intValue = maxOf(0, skill.likesCount - 1)
+                            }
+
+                            onLikeClick()
+                        }
+                    ) {
                         Icon(
-                            imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                            contentDescription = "Лајк",
-                            tint = if (isLiked) Color.Red else Color.Gray
+                            imageVector = if (isLikedByMe) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = stringResource(R.string.desc_like),
+                            tint = if (isLikedByMe) RedCoral else SlateSecondary
                         )
                     }
                     Text(
-                        text = "${skill.likesCount}",
+                        text = "${displayLikesCount.intValue}",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color.DarkGray
+                        color = if (isLikedByMe) RedCoral else SlateSecondary
                     )
                 }
 
@@ -94,7 +139,7 @@ fun AdvancedSkillCard(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Email,
-                            contentDescription = "Gmail контакт",
+                            contentDescription = stringResource(R.string.desc_gmail_contact),
                             tint = EmeraldPrimary
                         )
                     }
@@ -108,10 +153,21 @@ fun AdvancedSkillCard(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                         modifier = Modifier.height(36.dp)
                     ) {
-                        Text("Чет", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.chat), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
     }
+}
+private fun getCategoryTranslation(categoryId: String, context: android.content.Context): String {
+    val resId = when (categoryId.uppercase()) {
+        "GENERAL" -> R.string.cat_general
+        "MUSIC" -> R.string.cat_music
+        "TECH" -> R.string.cat_tech
+        "LANG" -> R.string.cat_languages
+        "SPORTS" -> R.string.cat_sports
+        else -> R.string.cat_general // Безбедносен бекап
+    }
+    return context.getString(resId)
 }

@@ -16,7 +16,7 @@ private val DarkColorScheme = darkColorScheme(
     primary = EmeraldLight,
     secondary = SlateSecondary,
     tertiary = AmberAccent,
-    background = Color(0xFF121212)
+    background = Black
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -24,7 +24,7 @@ private val LightColorScheme = lightColorScheme(
     secondary = SlateSecondary,
     tertiary = AmberAccent,
     background = BackgroundGray,
-    onPrimary = Color.White
+    onPrimary = White
 )
 
 @Composable

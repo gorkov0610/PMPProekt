@@ -6,7 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
+import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
@@ -15,13 +15,14 @@ fun sendEmailIntent(context: Context, receiverEmail: String, skillTitle: String)
     val intent = Intent(Intent.ACTION_SENDTO).apply {
         data = "mailto:".toUri()
         putExtra(Intent.EXTRA_EMAIL, arrayOf(receiverEmail))
-        putExtra(Intent.EXTRA_SUBJECT, "[SkillSwap] Прашање за вештината: $skillTitle")
-        putExtra(Intent.EXTRA_TEXT, "Здраво,\n\nЗаинтересиран сум за вашата вештина '$skillTitle' објавена на SkillSwap...")
+        putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.email_subject,skillTitle))
+        putExtra(Intent.EXTRA_TEXT, context.getString(R.string.email_body))
     }
     try {
-        context.startActivity(Intent.createChooser(intent, "Избери меил апликација:"))
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.choose_mail_client)))
     } catch (e: Exception) {
-        Toast.makeText(context, "Нема пронајдено меил апликација", Toast.LENGTH_SHORT).show()
+        Log.e("EmailIntent", "Грешка при отворање на маил клиент", e)
+        Toast.makeText(context, context.getString(R.string.no_email_client), Toast.LENGTH_SHORT).show()
     }
 }
 fun showLocalNotification(context: Context, title: String, message: String, senderId: String, senderName: String) {
@@ -30,27 +31,22 @@ fun showLocalNotification(context: Context, title: String, message: String, send
 
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    // 1. КРЕИРАЊЕ НА КАНАЛОТ (Задолжително за Android 8.0+)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(
-            channelId,
-            "SkillSwap Chat Messages",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Notification channel for real-time chat messages"
-            enableLights(true)
-            enableVibration(true)
-        }
-        notificationManager.createNotificationChannel(channel)
+    val channel = NotificationChannel(
+        channelId,
+        "SkillSwap Chat Messages",
+        NotificationManager.IMPORTANCE_HIGH
+    ).apply {
+        description = "Notification channel for real-time chat messages"
+        enableLights(true)
+        enableVibration(true)
     }
+    notificationManager.createNotificationChannel(channel)
 
-    // 2. КРЕИРАЊЕ НА DEEP LINK НАМЕРА (INTENT) ЗА КЛИК
-    // Го користиме точниот пакет на твојата апликација: uklo.fikt.pmp.pmpproekt
-    val encodedName = Uri.encode(senderName)
+    Uri.encode(senderName)
     val intent = if (senderId.isNotEmpty()) {
         // АКО Е ЧАТ: Оди во соодветната соба
         val encodedName = Uri.encode(senderName)
-        Intent(Intent.ACTION_VIEW, Uri.parse("skillswap://chat/$senderId/$encodedName")).apply {
+        Intent(Intent.ACTION_VIEW, "skillswap://chat/$senderId/$encodedName".toUri()).apply {
             `package` = "uklo.fikt.pmp.pmpproekt"
         }
     } else {
@@ -78,10 +74,9 @@ fun showLocalNotification(context: Context, title: String, message: String, send
         .setContentIntent(pendingIntent) // КЛУЧНО: Ова ја извршува навигацијата при клик
         .setDefaults(NotificationCompat.DEFAULT_ALL)
 
-    // 4. ПРИКАЖУВАЊЕ
     try {
         notificationManager.notify(notificationId, builder.build())
     } catch (e: Exception) {
-        android.util.Log.e("GLOBAL_FCM", "Грешка при прикажување на нотификацијата", e)
+        Log.e("GLOBAL_FCM", "Грешка при прикажување на нотификацијата", e)
     }
 }

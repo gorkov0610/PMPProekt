@@ -1,5 +1,6 @@
 package uklo.fikt.pmp.pmpproekt
 
+import android.annotation.SuppressLint
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -8,14 +9,18 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
@@ -24,6 +29,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -40,9 +46,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -61,6 +67,8 @@ import uklo.fikt.pmp.pmpproekt.data.Skill
 import uklo.fikt.pmp.pmpproekt.ui.theme.BackgroundGray
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
 import uklo.fikt.pmp.pmpproekt.ui.theme.PMPProektTheme
+import uklo.fikt.pmp.pmpproekt.ui.theme.SlateSecondary
+import uklo.fikt.pmp.pmpproekt.ui.theme.White
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,11 +83,6 @@ class MainActivity : ComponentActivity() {
                 val authManager = remember { AuthManager(applicationContext) }
                 var user by remember { mutableStateOf(authManager.getCurrentUser()) }
 
-                LaunchedEffect(user?.uid) {
-                    if(user?.uid != null){
-                        startLikesObserver(context = applicationContext, user!!.uid)
-                    }
-                }
                 if(user == null){
                     LoginScreen(authManager = authManager, onLoginSuccess = {
                         user = authManager.getCurrentUser()
@@ -98,6 +101,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@SuppressLint("LocalContextGetResourceValueCall")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainContent(email : String, onLogout : () -> Unit){
@@ -109,7 +113,7 @@ fun MainContent(email : String, onLogout : () -> Unit){
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    var showDialog by remember { mutableStateOf(false) }
+    val showDialog = rememberSaveable { mutableStateOf(false) }
     val currentUser = remember(authManager) { authManager.getCurrentUser() }
     val currentUserId = currentUser?.uid ?: ""
 
@@ -121,7 +125,7 @@ fun MainContent(email : String, onLogout : () -> Unit){
             db.collectionGroup("messages")
                 .whereEqualTo("receiverId", currentUserId)
                 .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                .limit(1) // Го земаме САМО последниот документ што се појавил во базата
+                .limit(1)
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) {
                         Log.e("GLOBAL_FCM", "Грешка при слушање", e)
@@ -137,8 +141,8 @@ fun MainContent(email : String, onLogout : () -> Unit){
                         val isFromCache = snapshot.metadata.isFromCache
 
                         val senderId = latestDoc.getString("senderId") ?: ""
-                        val text = latestDoc.getString("text") ?: "Нова порака."
-                        val senderName = latestDoc.getString("senderName") ?: "Некој"
+                        val text = latestDoc.getString("text") ?: context.getString(R.string.default_message_text)
+                        val senderName = latestDoc.getString("senderName") ?: context.getString(R.string.default_sender_name)
 
                         Log.d("GLOBAL_FCM", "Фатена последна порака: '$text' (Кеш: $isFromCache)")
 
@@ -146,10 +150,9 @@ fun MainContent(email : String, onLogout : () -> Unit){
                         // 1. Ако пораката НЕ е од нас самите
                         // 2. Ако податокот доаѓа свеж од серверот (isFromCache == false), со што се избегнуваат старите кеширани пораки при палење на апликацијата
                         if (senderId != currentUserId && !isFromCache) {
-                            Log.d("GLOBAL_FCM", "УСПЕШНО СТИГНАА ПОДАТОЦИТЕ! Скока нотификација...")
                             showLocalNotification(
                                 context = context,
-                                title = "Нова порака од $senderName 💬",
+                                title = context.getString(R.string.new_message, senderName),
                                 message = text,
                                 senderId = senderId,
                                 senderName = senderName
@@ -163,23 +166,42 @@ fun MainContent(email : String, onLogout : () -> Unit){
         topBar = {
             if(currentRoute == Screen.Feed.route) {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.app_name), color = Color.White) },
+                    title = { Text(stringResource(R.string.app_name), color = White) },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
                     actions = {
                         // 1. ИКОНА ЗА ПРОФИЛ
                         IconButton(onClick = { navController.navigate("profile") }) {
                             Icon(
                                 imageVector = Icons.Default.Person,
-                                contentDescription = "Профил",
-                                tint = Color.White
+                                contentDescription = stringResource(R.string.desc_profile),
+                                tint = White
                             )
                         }
 
                         IconButton(onClick = { navController.navigate("inbox") }) {
                             Icon(
-                                imageVector = Icons.Default.Email, // или Mail/Chat_bubble
-                                contentDescription = "Inbox",
-                                tint = Color.White
+                                imageVector = Icons.Default.Email,
+                                contentDescription = stringResource(R.string.desc_inbox),
+                                tint = White
+                            )
+                        }
+                    }
+                )
+            } else if (currentRoute == "inbox") {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = stringResource(R.string.inbox_title),
+                            color = White
+                        )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
+                    navigationIcon = {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.desc_back),
+                                tint = White
                             )
                         }
                     }
@@ -189,17 +211,19 @@ fun MainContent(email : String, onLogout : () -> Unit){
         floatingActionButton = {
             if (currentRoute == Screen.Feed.route) {
                 FloatingActionButton(
-                    onClick = { showDialog = true },
+                    onClick = { showDialog.value = true },
                     containerColor = EmeraldPrimary,
-                    contentColor = Color.White
+                    contentColor = White
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add")
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.desc_add))
                 }
             }
         }
     ){ padding ->
-        // ТУКА БЕШЕ ГРЕШКАТА - НЕ ДЕФИНИРАЈ НОВ navController ТУКА
-        Box(modifier = Modifier.padding(padding).fillMaxSize().background(BackgroundGray)) {
+        Box(modifier = Modifier
+            .padding(padding)
+            .fillMaxSize()
+            .background(BackgroundGray)) {
 
             NavHost(navController, Screen.Feed.route) {
 
@@ -209,7 +233,6 @@ fun MainContent(email : String, onLogout : () -> Unit){
                         authManager,
                         onChatClick = { skill ->
                             val encodeName = Uri.encode(skill.authorName)
-                            // Го праќаме authorId (кој е примач) и името
                             navController.navigate("chat/${skill.authorId}/$encodeName")
                         })
                 }
@@ -218,7 +241,6 @@ fun MainContent(email : String, onLogout : () -> Unit){
                         authManager = authManager,
                         onChatClick = { receiverId, name ->
                             val encodeName = Uri.encode(name)
-                            // Кога ќе кликнеш на некој разговор во Inbox, те носи директно во ChatScreen
                             navController.navigate("chat/$receiverId/$encodeName")
                         }
                     )
@@ -229,7 +251,6 @@ fun MainContent(email : String, onLogout : () -> Unit){
                         onBack = { navController.popBackStack() },
                         onLogout = {
                             authManager.signOut()
-                            // Ресетирај го корисникот во MainActivity за да се врати на Login
                             onLogout()
                         }
                     )
@@ -257,142 +278,216 @@ fun MainContent(email : String, onLogout : () -> Unit){
                     )
                 }
             }
-        }
-    }
-    if (showDialog) {
-        var title by remember { mutableStateOf("") }
-        var desc by remember { mutableStateOf("") }
-        var expanded by remember { mutableStateOf(false) } // Дали е отворено менито
-        val categoryOptions = listOf(
-            CategoryItem("GENERAL", R.string.cat_general),
-            CategoryItem("MUSIC", R.string.cat_music),
-            CategoryItem("TECH", R.string.cat_tech),
-            CategoryItem("LANG", R.string.cat_languages),
-            CategoryItem("SPORTS", R.string.cat_sports)
-        )
-        var selectedCategoryItem by remember { mutableStateOf(categoryOptions[0]) }
+            if (showDialog.value) {
+                var title by rememberSaveable { mutableStateOf("") }
+                var desc by rememberSaveable { mutableStateOf("") }
+                var expanded by remember { mutableStateOf(false) }
 
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text(stringResource(R.string.add_skill_title), color = EmeraldPrimary) },
-            text = {
-                Column {
-                    ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { expanded = !expanded },
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = stringResource(selectedCategoryItem.nameRes),
-                            onValueChange = {},
-                            readOnly = true, // Спречува корисникот да пишува рачно
-                            label = { Text(stringResource(R.string.category_label)) }, // Додај го ова во strings.xml
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
+                val categoryOptions = listOf(
+                    CategoryItem("GENERAL", R.string.cat_general),
+                    CategoryItem("MUSIC", R.string.cat_music),
+                    CategoryItem("TECH", R.string.cat_tech),
+                    CategoryItem("LANG", R.string.cat_languages),
+                    CategoryItem("SPORTS", R.string.cat_sports)
+                )
 
-                        ExposedDropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            categoryOptions.forEach { item ->
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(item.nameRes)) },
-                                    onClick = {
-                                        selectedCategoryItem = item
-                                        expanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    OutlinedTextField(
-                        value = title,
-                        onValueChange = { title = it },
-                        label = {
-                            Text(
-                                stringResource(R.string.skill_name_label)
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = desc,
-                        onValueChange = { desc = it },
-                        label = {
-                            Text(
-                                stringResource(R.string.description_label)
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                // БЕЗБЕДНО ЗАЧУВУВАЊЕ ПРИ РОТАЦИЈА: Го чуваме само Стрингот (ID-то)
+                var selectedCategoryId by rememberSaveable { mutableStateOf("GENERAL") }
+
+                // Динамички го наоѓаме објектот за да ги извлечеме ресурсите за превод (nameRes)
+                val selectedCategoryItem = remember(selectedCategoryId) {
+                    categoryOptions.firstOrNull { it.id == selectedCategoryId } ?: categoryOptions[0]
                 }
-            },
-            confirmButton = {
-                Button(
-                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
-                    onClick = {
-                        if (title.isNotBlank()) {
-                            val currentUser = authManager.getCurrentUser()
-                            val currentUserId = currentUser?.uid ?: ""
 
-                            // 1. Пристапуваме до Firestore за да го земеме вистинското име од профилот
-                            val firestoreDb = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                            firestoreDb.collection("users").document(currentUserId).get()
-                                .addOnSuccessListener { document ->
-                                    // Го бараме полето "name" или "username" во неговиот профил
-                                    val actualName = if (document != null && document.exists()) {
-                                        document.getString("name") ?: document.getString("username") ?: defaultUsername
-                                    } else {
-                                        currentUser?.displayName ?: defaultUsername
+                AlertDialog(
+                    onDismissRequest = { showDialog.value = false },
+                    title = { Text(stringResource(R.string.add_skill_title), color = EmeraldPrimary) },
+                    text = {
+                        BoxWithConstraints {
+                            val isTablet = maxWidth > 500.dp
+
+                            if (isTablet) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        ExposedDropdownMenuBox(
+                                            expanded = expanded,
+                                            onExpandedChange = { expanded = !expanded },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 8.dp)
+                                        ) {
+                                            OutlinedTextField(
+                                                value = stringResource(selectedCategoryItem.nameRes),
+                                                onValueChange = {},
+                                                readOnly = true,
+                                                label = { Text(stringResource(R.string.category_label)) },
+                                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                                                modifier = Modifier
+                                                    .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
+                                                    .fillMaxWidth(),
+                                                shape = RoundedCornerShape(12.dp)
+                                            )
+                                            ExposedDropdownMenu(
+                                                expanded = expanded,
+                                                onDismissRequest = { expanded = false }
+                                            ) {
+                                                categoryOptions.forEach { item ->
+                                                    DropdownMenuItem(
+                                                        text = { Text(stringResource(item.nameRes)) },
+                                                        onClick = {
+                                                            // ГО АЖУРИРАМЕ ID-то
+                                                            selectedCategoryId = item.id
+                                                            expanded = false
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        OutlinedTextField(
+                                            value = title,
+                                            onValueChange = { title = it },
+                                            label = { Text(stringResource(R.string.skill_name_label)) },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 8.dp),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
                                     }
 
-                                    // 2. ДУРИ СЕГА го креираме огласот со вистинското име
-                                    val newSkill = Skill(
-                                        id = java.util.UUID.randomUUID().toString(),
-                                        title = title,
-                                        description = desc,
-                                        authorId = currentUserId,
-                                        authorName = actualName, // ТУКА ОДИ ВИСТИНСКОТО ИМЕ!
-                                        contactEmail = email,
-                                        category = selectedCategoryItem.id
-                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        OutlinedTextField(
+                                            value = desc,
+                                            onValueChange = { desc = it },
+                                            label = { Text(stringResource(R.string.description_label)) },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .fillMaxHeight(0.4f)
+                                                .padding(vertical = 8.dp),
+                                            shape = RoundedCornerShape(12.dp),
+                                            maxLines = 4
+                                        )
+                                    }
+                                }
+                            } else {
+                                Column {
+                                    ExposedDropdownMenuBox(
+                                        expanded = expanded,
+                                        onExpandedChange = { expanded = !expanded },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = stringResource(selectedCategoryItem.nameRes),
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            label = { Text(stringResource(R.string.category_label)) },
+                                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                                            modifier = Modifier
+                                                .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
+                                                .fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
 
-                                    // 3. Го зачувуваме огласот во базата
-                                    dbManager.saveSkill(newSkill) { success ->
-                                        if (success) {
-                                            Log.d("SkillSwap", "Успешно запишување")
-                                            showDialog = false
-                                        } else {
-                                            Log.d("SkillSwap", "Неуспешно запишување")
+                                        ExposedDropdownMenu(
+                                            expanded = expanded,
+                                            onDismissRequest = { expanded = false }
+                                        ) {
+                                            categoryOptions.forEach { item ->
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(item.nameRes)) },
+                                                    onClick = {
+                                                        // ГО АЖУРИРАМЕ ID-то
+                                                        selectedCategoryId = item.id
+                                                        expanded = false
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
-                                }
-                                .addOnFailureListener {
-                                    // Безбедносна мрежа ако нема интернет или ја нема колекцијата
-                                    val newSkill = Skill(
-                                        id = java.util.UUID.randomUUID().toString(),
-                                        title = title,
-                                        description = desc,
-                                        authorId = currentUserId,
-                                        authorName = currentUser?.displayName ?: defaultUsername,
-                                        contactEmail = email,
-                                        category = selectedCategoryItem.id
+                                    OutlinedTextField(
+                                        value = title,
+                                        onValueChange = { title = it },
+                                        label = { Text(stringResource(R.string.skill_name_label)) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp)
                                     )
-                                    dbManager.saveSkill(newSkill) { showDialog = false }
+                                    Spacer(Modifier.height(12.dp))
+                                    OutlinedTextField(
+                                        value = desc,
+                                        onValueChange = { desc = it },
+                                        label = { Text(stringResource(R.string.description_label)) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
                                 }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                            onClick = {
+                                if (title.isNotBlank()) {
+                                    val currentUser = authManager.getCurrentUser()
+                                    val currentUserId = currentUser?.uid ?: ""
+
+                                    val firestoreDb = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                    firestoreDb.collection("users").document(currentUserId).get()
+                                        .addOnSuccessListener { document ->
+                                            val actualName = if (document != null && document.exists()) {
+                                                document.getString("name") ?: document.getString("username") ?: defaultUsername
+                                            } else {
+                                                currentUser?.displayName ?: defaultUsername
+                                            }
+
+                                            val newSkill = Skill(
+                                                id = java.util.UUID.randomUUID().toString(),
+                                                title = title,
+                                                description = desc,
+                                                authorId = currentUserId,
+                                                authorName = actualName,
+                                                contactEmail = email,
+                                                category = selectedCategoryItem.id // Го користиме точното ID за зачувување
+                                            )
+
+                                            dbManager.saveSkill(newSkill) { success ->
+                                                if (success) {
+                                                    Log.d("SkillSwap", "Успешно запишување")
+                                                    showDialog.value = false
+                                                } else {
+                                                    Log.d("SkillSwap", "Неуспешно запишување")
+                                                }
+                                            }
+                                        }
+                                        .addOnFailureListener {
+                                            val newSkill = Skill(
+                                                id = java.util.UUID.randomUUID().toString(),
+                                                title = title,
+                                                description = desc,
+                                                authorId = currentUserId,
+                                                authorName = currentUser?.displayName ?: defaultUsername,
+                                                contactEmail = email,
+                                                category = selectedCategoryItem.id
+                                            )
+                                            dbManager.saveSkill(newSkill) { showDialog.value = false }
+                                        }
+                                }
+                            }
+                        ) { Text(stringResource(R.string.publish_button)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDialog.value = false }) {
+                            Text(stringResource(R.string.cancel_button), color = SlateSecondary)
                         }
                     }
-                ) { Text(stringResource(R.string.publish_button)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text(stringResource(R.string.cancel_button), color = Color.Gray)
-                }
+                )
             }
-        )
+        }
     }
 }
 

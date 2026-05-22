@@ -13,3 +13,8 @@ val AmberAccent = Color(0xFFFFC107)
 
 val BackgroundGray = Color(0xFFF8F9FA)
 val White = Color.White
+val Black = Color.Black
+
+val FbBlue = Color(0xFF1877F2)
+val RedCoralDim = Color(0xFFF9D5D3)
+val RedCoral = Color(0xFFF07167)
