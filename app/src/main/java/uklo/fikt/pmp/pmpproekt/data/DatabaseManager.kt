@@ -23,35 +23,35 @@ class DatabaseManager {
     }
 
     fun saveSkill(skill: Skill, onComplete: (Boolean) -> Unit){
-        val docRef = skillsCollection.document()
-        val skillWithId = skill.copy(id = docRef.id)
-
-        docRef.set(skillWithId)
+        val docRef = skillsCollection.document(skill.id)
+        docRef.set(skill)
             .addOnCompleteListener { task ->
                 onComplete(task.isSuccessful)
             }
     }
 
-    fun getSkills(onResult: (List<Skill>) -> Unit){
+    fun getSkills(onResult: (List<Skill>) -> Unit) {
         skillsCollection.addSnapshotListener { snapshots, error ->
-            if(error != null){
+            if (error != null) {
                 onResult(emptyList())
                 return@addSnapshotListener
             }
-            val skills = snapshots?.toObjects<Skill>() ?: emptyList()
+
+            val skills = snapshots?.documents?.mapNotNull { doc ->
+                doc.toObject(Skill::class.java)?.copy(id = doc.id)
+            } ?: emptyList()
+
             onResult(skills)
         }
     }
 
 
     fun sendMessage(chatRoomId: String, message: Message, receiverName: String, currentUserName: String) {
-        // 1. Ја зачувуваме пораката во колекцијата messages во самата соба
         db.collection("chats")
             .document(chatRoomId)
             .collection("messages")
             .add(message)
 
-        // 2. Ги ажурираме главните информации за собата (за потребите на InboxScreen)
         val chatRoomInfo = mapOf(
             "lastMessage" to message.text,
             "timestamp" to message.timestamp,
@@ -65,7 +65,6 @@ class DatabaseManager {
             .document(chatRoomId)
             .set(chatRoomInfo, SetOptions.merge())
 
-        // 3. ПЛАН Б НОТИФИКАЦИЈА: Го земаме токенот на примачот и запишуваме во "notifications"
         db.collection("users").document(message.receiverId).get()
             .addOnSuccessListener { userDoc ->
                 val receiverToken = userDoc.getString("fcmToken")
@@ -82,7 +81,6 @@ class DatabaseManager {
             }
     }
 
-    // Слушање за нови пораки во собата во реално време
     fun listenForMessages(chatRoomId: String, onMessagesUpdate: (List<Message>) -> Unit) {
         db.collection("chats")
             .document(chatRoomId)
@@ -99,6 +97,50 @@ class DatabaseManager {
                 } ?: emptyList()
 
                 onMessagesUpdate(messages)
+            }
+    }
+    fun deleteUserData(userId: String, onComplete: (Boolean) -> Unit) {
+        val db = FirebaseFirestore.getInstance()
+
+        db.collection("skills")
+            .whereEqualTo("authorId", userId)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val batch = db.batch()
+
+                for (doc in snapshot.documents) {
+                    batch.delete(doc.reference)
+                }
+
+                val userRef = db.collection("users").document(userId)
+                batch.delete(userRef)
+
+                batch.commit()
+                    .addOnSuccessListener {
+                        onComplete(true)
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("DB_DELETE", "Грешка при бришење од Firestore", e)
+                        onComplete(false)
+                    }
+            }
+            .addOnFailureListener {
+                onComplete(false)
+            }
+    }
+    fun getLikedSkills(uid: String, onResult: (List<Skill>) -> Unit, onFailure: (Exception) -> Unit) {
+        skillsCollection.whereArrayContains("likedBy", uid)
+            .addSnapshotListener { snapshots, error ->
+                if (error != null) {
+                    onFailure(error)
+                    return@addSnapshotListener
+                }
+
+                val skills = snapshots?.documents?.mapNotNull { doc ->
+                    doc.toObject(Skill::class.java)?.copy(id = doc.id)
+                } ?: emptyList()
+
+                onResult(skills)
             }
     }
 }

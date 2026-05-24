@@ -31,7 +31,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +55,10 @@ import uklo.fikt.pmp.pmpproekt.data.Skill
 import uklo.fikt.pmp.pmpproekt.data.toggleLikeSkill
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldLight
 import uklo.fikt.pmp.pmpproekt.ui.theme.SlateSecondary
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import androidx.compose.runtime.*
+import kotlinx.coroutines.flow.first
 
 data class CategoryItem(
     val id: String,
@@ -100,6 +103,16 @@ class PreferenceManager(context: Context) {
     }
 }
 
+
+// Функција за проверка дали уредот има активна интернет конекција
+fun isOnline(context: Context): Boolean {
+    val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val network = connectivityManager.activeNetwork ?: return false
+    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+}
+
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun SkillFeed(
@@ -119,58 +132,69 @@ fun SkillFeed(
     val prefManager = remember { PreferenceManager(context) }
     val analytics = remember { FirebaseAnalytics.getInstance(context) }
 
-    val currentUser = authManager.getCurrentUser()
-    val currentUserId = currentUser?.uid ?: ""
+    val currentUserId = authManager.getCurrentUser()?.uid ?: ""
 
     val database = remember { AppDatabase.getDatabase(context) }
     val skillDao = remember { database.skillDao() }
     val coroutineScope = rememberCoroutineScope()
 
-    val cachedSkillsList by skillDao.getAllSkills().collectAsState(initial = emptyList())
-
+    var liveSkills by remember { mutableStateOf<List<Skill>>(emptyList()) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-
     var isRefreshing by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
-
-
     var selectedCategory by rememberSaveable { mutableStateOf(prefManager.getMostInterestedCategory()) }
 
     LaunchedEffect(Unit) {
-        dbManager.getSkills { fetchedSkills ->
-            coroutineScope.launch(Dispatchers.IO) {
-                val roomSkills = fetchedSkills.map { skill ->
-                    CachedSkill(
-                        id = skill.id,
-                        title = skill.title,
-                        description = skill.description,
-                        category = prefManager.normalizeCategory(skill.category),
-                        authorName = skill.authorName,
-                        authorId = skill.authorId,
-                        contactEmail = skill.contactEmail,
-                        likesCount = skill.likesCount
-                    )
-                }
-                skillDao.clearAll()
-                skillDao.insertSkills(roomSkills)
+        if (isOnline(context)) {
+            // ИМА ИНТЕРНЕТ: Читај директно од Firestore
+            dbManager.getSkills { fetchedSkills ->
+                liveSkills = fetchedSkills
+            }
+        } else {
+            Toast.makeText(context, "Работите во офлајн режим.", Toast.LENGTH_SHORT).show()
+            val cachedList = skillDao.getAllSkills().first() // Земи ја моменталната состојба од Room
+            liveSkills = cachedList.map { cached ->
+                val isLikedLocally = prefManager.isSkillLiked(cached.id)
+                Skill(
+                    id = cached.id,
+                    title = cached.title,
+                    description = cached.description,
+                    category = cached.category,
+                    authorName = cached.authorName,
+                    authorId = cached.authorId,
+                    contactEmail = cached.contactEmail,
+                    likesCount = cached.likesCount,
+                    likedBy = if (isLikedLocally) listOf(currentUserId) else emptyList()
+                )
             }
         }
     }
-    val skills = cachedSkillsList.map { cached ->
-        Skill(
-            id = cached.id,
-            title = cached.title,
-            description = cached.description,
-            category = cached.category,
-            authorName = cached.authorName,
-            authorId = cached.authorId,
-            contactEmail = cached.contactEmail,
-            likesCount = cached.likesCount,
-            likedBy = emptyList()
-        )
+
+    DisposableEffect(Unit) {
+        onDispose {
+            // Ова се извршува кога корисникот излегува од фидот
+            coroutineScope.launch(Dispatchers.IO) {
+                if (liveSkills.isNotEmpty()) {
+                    val roomSkills = liveSkills.map { skill ->
+                        CachedSkill(
+                            id = skill.id,
+                            title = skill.title,
+                            description = skill.description,
+                            category = prefManager.normalizeCategory(skill.category),
+                            authorName = skill.authorName,
+                            authorId = skill.authorId,
+                            contactEmail = skill.contactEmail,
+                            likesCount = skill.likesCount // Ја зачувува последната точна бројка
+                        )
+                    }
+                    skillDao.clearAll()       // 1. Бришење сè (Overwrite)
+                    skillDao.insertSkills(roomSkills) // 2. Запишување нови свежи податоци
+                }
+            }
+        }
     }
 
-    val filteredSkills = skills.filter { skill ->
+    val filteredSkills = liveSkills.filter { skill ->
         val matchesSearch = skill.title.contains(searchQuery, ignoreCase = true)
         val normalizedSkillCat = prefManager.normalizeCategory(skill.category)
         val matchesCategory = if (selectedCategory == "ALL") true else normalizedSkillCat == selectedCategory
@@ -184,9 +208,7 @@ fun SkillFeed(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
                 placeholder = { Text(stringResource(R.string.search_hint)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 shape = RoundedCornerShape(25.dp),
@@ -194,9 +216,7 @@ fun SkillFeed(
             )
 
             LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -219,32 +239,20 @@ fun SkillFeed(
                     Text(text = stringResource(R.string.no_skills), color = SlateSecondary)
                 }
             } else {
-                // АДАПТИВЕН ПРИКАЗ НА ОГЛАСИТЕ:
                 PullToRefreshBox(
                     isRefreshing = isRefreshing,
                     state = pullToRefreshState,
                     onRefresh = {
-                        coroutineScope.launch {
-                            isRefreshing = true
-                            dbManager.getSkills { fetchedSkills ->
-                                coroutineScope.launch(Dispatchers.IO) {
-                                    val roomSkills = fetchedSkills.map { skill ->
-                                        CachedSkill(
-                                            id = skill.id,
-                                            title = skill.title,
-                                            description = skill.description,
-                                            category = prefManager.normalizeCategory(skill.category),
-                                            authorName = skill.authorName,
-                                            authorId = skill.authorId,
-                                            contactEmail = skill.contactEmail,
-                                            likesCount = skill.likesCount
-                                        )
-                                    }
-                                    skillDao.clearAll()
-                                    skillDao.insertSkills(roomSkills)
-                                    isRefreshing = false // Го исклучува тркалото за вртење
+                        if (isOnline(context)) {
+                            coroutineScope.launch {
+                                isRefreshing = true
+                                dbManager.getSkills { fetchedSkills ->
+                                    liveSkills = fetchedSkills
+                                    isRefreshing = false
                                 }
                             }
+                        } else {
+                            Toast.makeText(context, "Нема интернет за освежување.", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxSize(),
@@ -258,111 +266,84 @@ fun SkillFeed(
                         )
                     }
                 ){
+                    val contentPadding = PaddingValues(16.dp)
+
                     if (isTabletOrLandscape) {
-                        // НА ТАБЛЕТ: Елегантна мрежа со 2 колони
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(2),
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
+                            contentPadding = contentPadding,
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             items(filteredSkills) { currentSkill ->
-                                AdvancedSkillCard(
+                                SkillCard(
                                     skill = currentSkill,
                                     onLikeClick = {
-                                        toggleLikeSkill(
-                                            currentSkill,
-                                            currentUserId,
-                                            getInstance(),
-                                            context
-                                        )
+                                        // ИНСТАНТ ЛОКАЛНО АЖУРИРАЊЕ НА ЕКРАНОТ ЗА ДА НЕ СЕ НАМАЛИ БРОЈКАТА
+                                        val isLiked = currentSkill.likedBy.contains(currentUserId) || prefManager.isSkillLiked(currentSkill.id)
+                                        liveSkills = liveSkills.map {
+                                            if (it.id == currentSkill.id) {
+                                                it.copy(
+                                                    likesCount = if (isLiked) it.likesCount - 1 else it.likesCount + 1,
+                                                    likedBy = if (isLiked) emptyList() else listOf(currentUserId)
+                                                )
+                                            } else it
+                                        }
+                                        toggleLikeSkill(currentSkill, currentUserId, getInstance(), context)
                                     },
                                     onChatClick = {
                                         if (currentSkill.authorId != currentUserId) {
-                                            val mappedCat =
-                                                prefManager.normalizeCategory(currentSkill.category)
+                                            val mappedCat = prefManager.normalizeCategory(currentSkill.category)
                                             prefManager.trackInterest(mappedCat)
 
                                             val bundle = Bundle().apply {
-                                                putString(
-                                                    FirebaseAnalytics.Param.ITEM_ID,
-                                                    currentSkill.id
-                                                )
-                                                putString(
-                                                    FirebaseAnalytics.Param.ITEM_NAME,
-                                                    currentSkill.title
-                                                )
-                                                putString(
-                                                    FirebaseAnalytics.Param.ITEM_CATEGORY,
-                                                    mappedCat
-                                                )
+                                                putString(FirebaseAnalytics.Param.ITEM_ID, currentSkill.id)
+                                                putString(FirebaseAnalytics.Param.ITEM_NAME, currentSkill.title)
+                                                putString(FirebaseAnalytics.Param.ITEM_CATEGORY, mappedCat)
                                                 putString("interaction_type", "CHAT_INITIATED")
                                             }
-                                            analytics.logEvent(
-                                                FirebaseAnalytics.Event.SELECT_ITEM,
-                                                bundle
-                                            )
-
+                                            analytics.logEvent(FirebaseAnalytics.Event.SELECT_ITEM, bundle)
                                             onChatClick(currentSkill)
                                         } else {
-                                            Toast.makeText(
-                                                context,
-                                                context.getString(R.string.error_own_skill),
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                            Toast.makeText(context, context.getString(R.string.error_own_skill), Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 )
                             }
                         }
                     } else {
-                        // НА ТЕЛЕФОН: Традиционална една колона под друга
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             items(filteredSkills) { currentSkill ->
-                                AdvancedSkillCard(
+                                SkillCard(
                                     skill = currentSkill,
                                     onLikeClick = {
-                                        toggleLikeSkill(
-                                            currentSkill,
-                                            currentUserId,
-                                            getInstance(),
-                                            context
-                                        )
+                                        val isLiked = currentSkill.likedBy.contains(currentUserId) || prefManager.isSkillLiked(currentSkill.id)
+                                        liveSkills = liveSkills.map {
+                                            if (it.id == currentSkill.id) {
+                                                it.copy(
+                                                    likesCount = if (isLiked) it.likesCount - 1 else it.likesCount + 1,
+                                                    likedBy = if (isLiked) emptyList() else listOf(currentUserId)
+                                                )
+                                            } else it
+                                        }
+                                        toggleLikeSkill(currentSkill, currentUserId, getInstance(), context)
                                     },
                                     onChatClick = {
                                         if (currentSkill.authorId != currentUserId) {
-                                            val mappedCat =
-                                                prefManager.normalizeCategory(currentSkill.category)
+                                            val mappedCat = prefManager.normalizeCategory(currentSkill.category)
                                             prefManager.trackInterest(mappedCat)
 
                                             val bundle = Bundle().apply {
-                                                putString(
-                                                    FirebaseAnalytics.Param.ITEM_ID,
-                                                    currentSkill.id
-                                                )
-                                                putString(
-                                                    FirebaseAnalytics.Param.ITEM_NAME,
-                                                    currentSkill.title
-                                                )
-                                                putString(
-                                                    FirebaseAnalytics.Param.ITEM_CATEGORY,
-                                                    mappedCat
-                                                )
+                                                putString(FirebaseAnalytics.Param.ITEM_ID, currentSkill.id)
+                                                putString(FirebaseAnalytics.Param.ITEM_NAME, currentSkill.title)
+                                                putString(FirebaseAnalytics.Param.ITEM_CATEGORY, mappedCat)
                                                 putString("interaction_type", "CHAT_INITIATED")
                                             }
-                                            analytics.logEvent(
-                                                FirebaseAnalytics.Event.SELECT_ITEM,
-                                                bundle
-                                            )
-
+                                            analytics.logEvent(FirebaseAnalytics.Event.SELECT_ITEM, bundle)
                                             onChatClick(currentSkill)
                                         } else {
-                                            Toast.makeText(
-                                                context,
-                                                context.getString(R.string.error_own_skill),
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                            Toast.makeText(context, context.getString(R.string.error_own_skill), Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 )

@@ -10,35 +10,36 @@ import uklo.fikt.pmp.pmpproekt.showLocalNotification
 fun toggleLikeSkill(skill: Skill, currentUserId: String, db: FirebaseFirestore, context: Context) {
     val skillRef = db.collection("skills").document(skill.id)
     val prefManager = PreferenceManager(context)
-    val isAlreadyLiked = prefManager.isSkillLiked(skill.id)
+
+    // ПРОВЕРКА ОД БАЗАТА: Дали мојот UID е веќе во низата на огласот?
+    val isAlreadyLiked = skill.likedBy.contains(currentUserId)
 
     if (isAlreadyLiked) {
+        // Веќе имало мој UID -> Значи корисникот сака да ОДЛАЈКНЕ
+        prefManager.setSkillLiked(skill.id, false)
+
+        skillRef.update(
+            "likesCount", FieldValue.increment(-1),
+            "likedBy", FieldValue.arrayRemove(currentUserId)
+        )
+    } else {
+        // Го нема мојот UID -> Корисникот сака да ЛАЈКНЕ
+        prefManager.setSkillLiked(skill.id, true)
+
         skillRef.update(
             "likesCount", FieldValue.increment(1),
-            "likedBy", FieldValue.arrayRemove(currentUserId)
+            "likedBy", FieldValue.arrayUnion(currentUserId)
         ).addOnSuccessListener {
-            // Пресметуваме која ќе биде следната бројка на лајкови
             val nextLikesCount = skill.likesCount + 1
-
-            // За тест пред професор: ставаме да реагира и на 1 и на 2 лајкови за полесно демонстрирање
             if (nextLikesCount == 1 || nextLikesCount == 2 || nextLikesCount == 100 || nextLikesCount == 500) {
-
-                val notificationTitle = context.getString(R.string.notification_like_title)
-                val notificationText = context.getString(R.string.notification_like_message, skill.title, nextLikesCount)
-
                 showLocalNotification(
                     context = context,
-                    title = notificationTitle,
-                    message = notificationText,
-                    senderId = "",    // Празно за да знае нотификацијата дека НЕ треба да отвори чет
-                    senderName = ""   // Празно
+                    title = context.getString(R.string.notification_like_title),
+                    message = context.getString(R.string.notification_like_message, skill.title, nextLikesCount),
+                    senderId = "",
+                    senderName = ""
                 )
             }
         }
-    } else {
-        skillRef.update(
-            "likesCount", FieldValue.increment(-1),
-            "likedBy", FieldValue.arrayUnion(currentUserId)
-        )
     }
 }

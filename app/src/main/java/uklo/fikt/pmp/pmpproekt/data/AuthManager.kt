@@ -23,30 +23,44 @@ import com.google.firebase.firestore.SetOptions
 import uklo.fikt.pmp.pmpproekt.R
 
 @Suppress("DEPRECATION")
-class AuthManager (private val context: Context){
-    private val auth : FirebaseAuth = FirebaseAuth.getInstance()
+class AuthManager(private val context: Context) {
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val callbackManager = CallbackManager.Factory.create()
     private val db = FirebaseFirestore.getInstance()
 
     fun getCallbackManager() = callbackManager
-    fun saveUserToFirestore() {
-        val currentUser = auth.currentUser ?: return
+    fun getCurrentUser() = auth.currentUser
+    fun signOut() = auth.signOut()
 
-        // Ако е анонимен, можеш да ставиш име "Gostin"
-        val name = currentUser.displayName ?: (if (currentUser.isAnonymous) "Гостин" else "Корисник")
+    fun saveUserToFirestore(customName: String? = null) { // 🛠️ Го тргаме customUsername
+        val currentUser = auth.currentUser ?: return
+        val userId = currentUser.uid
+
+        val finalName = customName
+            ?: currentUser.displayName
+            ?: if (currentUser.isAnonymous) context.getString(R.string.chat_loading) else context.getString(R.string.user)
+
+        val finalProfilePicture = if (currentUser.photoUrl != null) {
+            currentUser.photoUrl.toString()
+        } else if (currentUser.isAnonymous) {
+            "https://api.dicebear.com/7.x/bottts/png?seed=$userId"
+        } else {
+            "https://ui-avatars.com/api/?name=${finalName}&background=A7F3D0&color=065F46&size=128"
+        }
 
         val user = User(
-            uid = currentUser.uid,
-            name = name,
+            uid = userId,
+            name = finalName,
             email = currentUser.email ?: "",
-            profilePicture = currentUser.photoUrl?.toString() ?: ""
+            profilePicture = finalProfilePicture
         )
 
-        db.collection("users").document(currentUser.uid)
-            .set(user, SetOptions.merge()) // .merge() е важно за да не ги пребришеме постоечките полиња
-            .addOnSuccessListener { Log.d("Firestore", "Корисникот е успешно зачуван!") }
+        db.collection("users").document(userId)
+            .set(user, SetOptions.merge())
+            .addOnSuccessListener { Log.d("Firestore", "Корисникот [$finalName] е успешно зачуван!") }
             .addOnFailureListener { e -> Log.e("Firestore", "Грешка при зачувување", e) }
     }
+
     fun handleFacebookLogin(onResult: (Boolean, String?) -> Unit) {
         LoginManager.getInstance().registerCallback(
             callbackManager,
@@ -56,25 +70,20 @@ class AuthManager (private val context: Context){
                     auth.signInWithCredential(credential)
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
+                                saveUserToFirestore() // 🛠️ Автоматски зачувај во база
                                 onResult(true, null)
                             } else {
                                 onResult(false, task.exception?.message)
                             }
                         }
                 }
-
-                override fun onCancel() {
-                    onResult(false, "Canceled")
-                }
-
-                override fun onError(error: FacebookException) {
-                    onResult(false, error.message)
-                }
+                override fun onCancel() { onResult(false, "Canceled") }
+                override fun onError(error: FacebookException) { onResult(false, error.message) }
             }
         )
     }
-    @Suppress("DEPRECATION")
-    fun getGoogleSignInClient() : GoogleSignInClient{
+
+    fun getGoogleSignInClient(): GoogleSignInClient {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(context.getString(R.string.default_web_client_id))
             .requestEmail()
@@ -82,22 +91,35 @@ class AuthManager (private val context: Context){
         return GoogleSignIn.getClient(context, gso)
     }
 
-    fun signInWithGoogle(idToken : String, onResult: (Boolean) -> (Unit)){
+    fun signInWithGoogle(idToken: String, onResult: (Boolean) -> Unit) {
         val credential = GoogleAuthProvider.getCredential(idToken, null)
         auth.signInWithCredential(credential)
             .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    saveUserToFirestore() // 🛠️ Автоматски зачувај во база
+                }
                 onResult(task.isSuccessful)
             }
     }
+
     fun signInAnonymously(onResult: (Boolean) -> Unit) {
         auth.signInAnonymously()
             .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    // 🛠️ Автоматски зачувај како Гостин со DiceBear роботче
+                    saveUserToFirestore(customName = "Гостин")
+                }
                 onResult(task.isSuccessful)
             }
     }
-    fun signUpWithEmail(email: String, pass: String, onResult: (Boolean, Throwable?) -> Unit) {
+
+    fun signUpWithEmail(email: String, pass: String, name: String, onResult: (Boolean, Throwable?) -> Unit) {
         auth.createUserWithEmailAndPassword(email, pass)
             .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    // 🛠️ Праќаме име и презиме за да генерира точни иницијали
+                    saveUserToFirestore(customName = name)
+                }
                 onResult(task.isSuccessful, task.exception)
             }
     }
@@ -105,27 +127,22 @@ class AuthManager (private val context: Context){
     fun signInWithEmail(email: String, pass: String, onResult: (Boolean, Throwable?) -> Unit) {
         auth.signInWithEmailAndPassword(email, pass)
             .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    saveUserToFirestore() // 🛠️ Се повикува за секој случај да ги освежи податоците
+                }
                 onResult(task.isSuccessful, task.exception)
             }
     }
-    fun getCurrentUser() = auth.currentUser
-    fun signOut() = auth.signOut()
-    fun getErrorMessage(exception: Exception?, context: Context): String {
-        if(exception == null) return context.getString(R.string.error_unknown)
 
+    fun getErrorMessage(exception: Exception?, context: Context): String {
+        if (exception == null) return context.getString(R.string.error_unknown)
         return when (exception) {
-            // 1. Прво специфичните (под-класи)
             is FirebaseAuthWeakPasswordException -> context.getString(R.string.error_weak_password)
             is FirebaseAuthUserCollisionException -> context.getString(R.string.error_user_collision)
             is FirebaseAuthInvalidUserException -> context.getString(R.string.error_user_not_found)
-
-            // 2. Потоа поопштата (parent class)
             is FirebaseAuthInvalidCredentialsException -> context.getString(R.string.error_wrong_password)
-
-            // 3. Останати
             is FirebaseNetworkException -> context.getString(R.string.error_network)
             else -> context.getString(R.string.error_unknown)
         }
     }
 }
-

@@ -2,7 +2,12 @@ package uklo.fikt.pmp.pmpproekt.data
 
 sealed class Screen(val route: String) {
     object Feed : Screen("feed")
-    object Chat : Screen("chat/{skillId}/{authorName}") {
-        fun createRoute(skillId: String, authorName: String) = "chat/$skillId/$authorName"
+    object Inbox : Screen("inbox")
+    object Profile : Screen("profile")
+    object MySkills : Screen("my_skills")
+    object Login : Screen("login")
+    object LikedSkills : Screen("liked_skills")
+    object Chat : Screen("chat/{receiverId}/{authorName}") {
+        fun createRoute(receiverId: String, authorName: String) = "chat/$receiverId/$authorName"
     }
 }

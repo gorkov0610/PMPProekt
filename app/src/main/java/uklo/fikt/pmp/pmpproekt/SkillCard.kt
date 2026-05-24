@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -43,10 +45,12 @@ import uklo.fikt.pmp.pmpproekt.ui.theme.RedCoral
 import uklo.fikt.pmp.pmpproekt.ui.theme.SlateSecondary
 
 @Composable
-fun AdvancedSkillCard(
+fun SkillCard(
     skill: Skill,
     onLikeClick: () -> Unit,
-    onChatClick: () -> Unit
+    onChatClick: () -> Unit,
+    onEditClick: (() -> Unit)? = null,
+    onDeleteClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -101,7 +105,7 @@ fun AdvancedSkillCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // ЛЕВО: Срце и број на лајкови
+                // ЛЕВО: Срце и број на лајкови (Ова останува секогаш исто)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = {
@@ -132,28 +136,52 @@ fun AdvancedSkillCard(
                     )
                 }
 
-                // ДЕСНО: Gmail Интент и Внатрешен Чет
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = { sendEmailIntent(context, skill.contactEmail, skill.title) }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Email,
-                            contentDescription = stringResource(R.string.desc_gmail_contact),
-                            tint = EmeraldPrimary
-                        )
+                // ДЕСНО: Паметна замена во зависност од тоа чиј е огласот
+                if (onEditClick != null && onDeleteClick != null) {
+                    // АВТОРСКИ ПРИКАЗ: Корисникот го гледа својот оглас -> Прикажи Уреди и Избриши
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onEditClick) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = stringResource(R.string.desc_edit),
+                                tint = EmeraldPrimary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        IconButton(onClick = onDeleteClick) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.desc_delete),
+                                tint = RedCoral
+                            )
+                        }
                     }
+                } else {
+                    // СТАНДАРДЕН ПРИКАЗ: Gmail Интент и Внатрешен Чет
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = { sendEmailIntent(context, skill.contactEmail, skill.title) }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Email,
+                                contentDescription = stringResource(R.string.desc_gmail_contact),
+                                tint = EmeraldPrimary
+                            )
+                        }
 
-                    Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
 
-                    Button(
-                        onClick = onChatClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
-                        shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                        modifier = Modifier.height(36.dp)
-                    ) {
-                        Text(stringResource(R.string.chat), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = onChatClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                            shape = RoundedCornerShape(20.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text(stringResource(R.string.chat), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
