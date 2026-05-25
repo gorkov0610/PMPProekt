@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,7 @@ import uklo.fikt.pmp.pmpproekt.ui.theme.SlateSecondary
 @Composable
 fun SkillCard(
     skill: Skill,
+    prefManager: PreferenceManager,
     onLikeClick: () -> Unit,
     onChatClick: () -> Unit,
     onEditClick: (() -> Unit)? = null,
@@ -54,13 +56,12 @@ fun SkillCard(
 ) {
     val context = LocalContext.current
 
-    val prefManager = remember { PreferenceManager(context) }
-
     var isLikedByMe by remember(skill.id) { mutableStateOf(prefManager.isSkillLiked(skill.id)) }
-
     val displayLikesCount = remember(skill.id) { mutableIntStateOf(skill.likesCount) }
 
-
+    LaunchedEffect(skill.likesCount) {
+        displayLikesCount.intValue = skill.likesCount
+    }
     Card(
         modifier = Modifier
             .fillMaxWidth()

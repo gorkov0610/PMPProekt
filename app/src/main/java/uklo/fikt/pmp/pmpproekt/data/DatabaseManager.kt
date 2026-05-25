@@ -6,9 +6,9 @@ import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.analytics.analytics
 import com.google.firebase.analytics.logEvent
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
-import com.google.firebase.firestore.toObjects
 
 class DatabaseManager {
     private val db = FirebaseFirestore.getInstance()
@@ -30,10 +30,10 @@ class DatabaseManager {
             }
     }
 
-    fun getSkills(onResult: (List<Skill>) -> Unit) {
-        skillsCollection.addSnapshotListener { snapshots, error ->
+    fun getSkills(onResult: (List<Skill>) -> Unit, onFailure: (Exception) -> Unit): ListenerRegistration {
+        return skillsCollection.addSnapshotListener { snapshots, error ->
             if (error != null) {
-                onResult(emptyList())
+                onFailure(error)
                 return@addSnapshotListener
             }
 
@@ -81,11 +81,11 @@ class DatabaseManager {
             }
     }
 
-    fun listenForMessages(chatRoomId: String, onMessagesUpdate: (List<Message>) -> Unit) {
-        db.collection("chats")
+    fun listenForMessages(chatRoomId: String, onMessagesUpdate: (List<Message>) -> Unit): ListenerRegistration {
+        return db.collection("chats")
             .document(chatRoomId)
             .collection("messages")
-            .orderBy("timestamp", Query.Direction.ASCENDING) // Од најстари кон најнови за убав чет приказ
+            .orderBy("timestamp", Query.Direction.ASCENDING)
             .addSnapshotListener { snapshot, e ->
                 if (e != null) {
                     Log.e("Firestore_Chat", "Грешка при слушање пораки", e)
@@ -100,8 +100,6 @@ class DatabaseManager {
             }
     }
     fun deleteUserData(userId: String, onComplete: (Boolean) -> Unit) {
-        val db = FirebaseFirestore.getInstance()
-
         db.collection("skills")
             .whereEqualTo("authorId", userId)
             .get()
@@ -128,8 +126,8 @@ class DatabaseManager {
                 onComplete(false)
             }
     }
-    fun getLikedSkills(uid: String, onResult: (List<Skill>) -> Unit, onFailure: (Exception) -> Unit) {
-        skillsCollection.whereArrayContains("likedBy", uid)
+    fun getLikedSkills(uid: String, onResult: (List<Skill>) -> Unit, onFailure: (Exception) -> Unit): ListenerRegistration {
+        return skillsCollection.whereArrayContains("likedBy", uid)
             .addSnapshotListener { snapshots, error ->
                 if (error != null) {
                     onFailure(error)

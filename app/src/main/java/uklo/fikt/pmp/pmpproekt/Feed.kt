@@ -30,7 +30,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,7 +56,9 @@ import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldLight
 import uklo.fikt.pmp.pmpproekt.ui.theme.SlateSecondary
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.util.Log
 import androidx.compose.runtime.*
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.first
 
 data class CategoryItem(
@@ -144,55 +145,68 @@ fun SkillFeed(
     val pullToRefreshState = rememberPullToRefreshState()
     var selectedCategory by rememberSaveable { mutableStateOf(prefManager.getMostInterestedCategory()) }
 
-    LaunchedEffect(Unit) {
-        if (isOnline(context)) {
-            // ИМА ИНТЕРНЕТ: Читај директно од Firestore
-            dbManager.getSkills { fetchedSkills ->
-                liveSkills = fetchedSkills
-            }
-        } else {
-            Toast.makeText(context, "Работите во офлајн режим.", Toast.LENGTH_SHORT).show()
-            val cachedList = skillDao.getAllSkills().first() // Земи ја моменталната состојба од Room
-            liveSkills = cachedList.map { cached ->
-                val isLikedLocally = prefManager.isSkillLiked(cached.id)
-                Skill(
-                    id = cached.id,
-                    title = cached.title,
-                    description = cached.description,
-                    category = cached.category,
-                    authorName = cached.authorName,
-                    authorId = cached.authorId,
-                    contactEmail = cached.contactEmail,
-                    likesCount = cached.likesCount,
-                    likedBy = if (isLikedLocally) listOf(currentUserId) else emptyList()
-                )
+    fun saveToLocalCache(skillsToCache: List<Skill>){
+        coroutineScope.launch(Dispatchers.IO) {
+            if (skillsToCache.isNotEmpty()) {
+                val roomSkills = skillsToCache.map { skill ->
+                    CachedSkill(
+                        id = skill.id,
+                        title = skill.title,
+                        description = skill.description,
+                        category = prefManager.normalizeCategory(skill.category),
+                        authorName = skill.authorName,
+                        authorId = skill.authorId,
+                        contactEmail = skill.contactEmail,
+                        likesCount = skill.likesCount
+                    )
+                }
+                skillDao.clearAll()
+                skillDao.insertSkills(roomSkills)
+                Log.d("RoomCache", "Податоците се успешно зачувани во локалната база.")
             }
         }
     }
 
     DisposableEffect(Unit) {
-        onDispose {
-            // Ова се извршува кога корисникот излегува од фидот
+        var listenerRegistration: ListenerRegistration? = null
+
+        if (isOnline(context)) {
+            listenerRegistration = dbManager.getSkills(
+                onResult = { fetchedSkills ->
+                    liveSkills = fetchedSkills
+                    saveToLocalCache(fetchedSkills)
+                },
+                onFailure = { e ->
+                    Log.e("FirebaseFetch", "Грешка при влечење огласи", e)
+                    Toast.makeText(context, "Грешка при вчитување на податоците.", Toast.LENGTH_SHORT).show()
+                }
+            )
+        } else {
+            Toast.makeText(context, "Работите во офлајн режим.", Toast.LENGTH_SHORT).show()
             coroutineScope.launch(Dispatchers.IO) {
-                if (liveSkills.isNotEmpty()) {
-                    val roomSkills = liveSkills.map { skill ->
-                        CachedSkill(
-                            id = skill.id,
-                            title = skill.title,
-                            description = skill.description,
-                            category = prefManager.normalizeCategory(skill.category),
-                            authorName = skill.authorName,
-                            authorId = skill.authorId,
-                            contactEmail = skill.contactEmail,
-                            likesCount = skill.likesCount // Ја зачувува последната точна бројка
-                        )
-                    }
-                    skillDao.clearAll()       // 1. Бришење сè (Overwrite)
-                    skillDao.insertSkills(roomSkills) // 2. Запишување нови свежи податоци
+                val cachedList = skillDao.getAllSkills().first()
+                liveSkills = cachedList.map { cached ->
+                    val isLikedLocally = prefManager.isSkillLiked(cached.id)
+                    Skill(
+                        id = cached.id,
+                        title = cached.title,
+                        description = cached.description,
+                        category = cached.category,
+                        authorName = cached.authorName,
+                        authorId = cached.authorId,
+                        contactEmail = cached.contactEmail,
+                        likesCount = cached.likesCount,
+                        likedBy = if (isLikedLocally) listOf(currentUserId) else emptyList()
+                    )
                 }
             }
         }
+
+        onDispose {
+            listenerRegistration?.remove()
+        }
     }
+
 
     val filteredSkills = liveSkills.filter { skill ->
         val matchesSearch = skill.title.contains(searchQuery, ignoreCase = true)
@@ -208,7 +222,9 @@ fun SkillFeed(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
                 placeholder = { Text(stringResource(R.string.search_hint)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 shape = RoundedCornerShape(25.dp),
@@ -216,7 +232,9 @@ fun SkillFeed(
             )
 
             LazyRow(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -243,14 +261,19 @@ fun SkillFeed(
                     isRefreshing = isRefreshing,
                     state = pullToRefreshState,
                     onRefresh = {
-                        if (isOnline(context)) {
-                            coroutineScope.launch {
-                                isRefreshing = true
-                                dbManager.getSkills { fetchedSkills ->
+                        if(isOnline(context)){
+                            isRefreshing = true
+                            dbManager.getSkills(
+                                onResult = { fetchedSkills ->
                                     liveSkills = fetchedSkills
+                                    saveToLocalCache(fetchedSkills)
+                                    isRefreshing = false
+                                },
+                                onFailure = { e ->
+                                    Log.e("FirebaseRefresh", "Грешка при рефреш", e)
                                     isRefreshing = false
                                 }
-                            }
+                            )
                         } else {
                             Toast.makeText(context, "Нема интернет за освежување.", Toast.LENGTH_SHORT).show()
                         }
@@ -292,6 +315,7 @@ fun SkillFeed(
                                         }
                                         toggleLikeSkill(currentSkill, currentUserId, getInstance(), context)
                                     },
+                                    prefManager = prefManager,
                                     onChatClick = {
                                         if (currentSkill.authorId != currentUserId) {
                                             val mappedCat = prefManager.normalizeCategory(currentSkill.category)
@@ -329,6 +353,7 @@ fun SkillFeed(
                                         }
                                         toggleLikeSkill(currentSkill, currentUserId, getInstance(), context)
                                     },
+                                    prefManager = prefManager,
                                     onChatClick = {
                                         if (currentSkill.authorId != currentUserId) {
                                             val mappedCat = prefManager.normalizeCategory(currentSkill.category)

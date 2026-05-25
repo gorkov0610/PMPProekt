@@ -8,8 +8,9 @@ import uklo.fikt.pmp.pmpproekt.R
 import uklo.fikt.pmp.pmpproekt.showLocalNotification
 
 fun toggleLikeSkill(skill: Skill, currentUserId: String, db: FirebaseFirestore, context: Context) {
+    val appContext = context.applicationContext
     val skillRef = db.collection("skills").document(skill.id)
-    val prefManager = PreferenceManager(context)
+    val prefManager = PreferenceManager(appContext)
 
     // ПРОВЕРКА ОД БАЗАТА: Дали мојот UID е веќе во низата на огласот?
     val isAlreadyLiked = skill.likedBy.contains(currentUserId)
@@ -32,10 +33,11 @@ fun toggleLikeSkill(skill: Skill, currentUserId: String, db: FirebaseFirestore, 
         ).addOnSuccessListener {
             val nextLikesCount = skill.likesCount + 1
             if (nextLikesCount == 1 || nextLikesCount == 2 || nextLikesCount == 100 || nextLikesCount == 500) {
+
                 showLocalNotification(
-                    context = context,
-                    title = context.getString(R.string.notification_like_title),
-                    message = context.getString(R.string.notification_like_message, skill.title, nextLikesCount),
+                    context = appContext,
+                    title = appContext.getString(R.string.notification_like_title),
+                    message = appContext.getString(R.string.notification_like_message, skill.title, nextLikesCount),
                     senderId = "",
                     senderName = ""
                 )

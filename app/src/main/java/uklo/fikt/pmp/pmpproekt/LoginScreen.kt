@@ -45,8 +45,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
-import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +53,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -67,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
+import com.google.firebase.auth.FirebaseAuth
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.ui.theme.Black
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldLight
@@ -84,14 +84,9 @@ fun LoginScreen(
 ) {
     val context = LocalContext.current
 
-    val activity = context as? Activity
-    val isTabletOrLandscape = if (activity != null) {
-        val windowSizeClass = calculateWindowSizeClass(activity)
-        windowSizeClass.widthSizeClass == WindowWidthSizeClass.Medium ||
-                windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
-    } else {
-        false
-    }
+    val configuration = LocalConfiguration.current
+    val isTabletOrLandscape = configuration.screenWidthDp >= 600 ||
+            configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -115,14 +110,40 @@ fun LoginScreen(
                 val account = task.getResult(ApiException::class.java)
                 val idToken = account?.idToken
                 if (idToken != null) {
-                    authManager.signInWithGoogle(idToken) { success ->
-                        isLoading = false
-                        if (success) {
-                            onLoginSuccess()
-                        } else {
-                            Toast.makeText(context, context.getString(R.string.error_firebase), Toast.LENGTH_SHORT).show()
+
+                    // Проверуваме дали сме дојдени за бришење
+                    if (authManager.isDeletingFlag()) {
+                        authManager.signInWithGoogle(idToken) { success ->
+                            if (success) {
+                                // Сега имаме свежа сесија, го бришеме корисникот од Auth инстантно
+                                FirebaseAuth.getInstance().currentUser?.delete()
+                                    ?.addOnSuccessListener {
+                                        authManager.setIsDeletingFlag(false) // Исклучи го знаменцето
+                                        authManager.signOut() // Излези за да остане на чист Login
+                                        isLoading = false
+                                        Toast.makeText(context, context.getString(R.string.label_delete_post_success), Toast.LENGTH_LONG).show()
+                                    }
+                                    ?.addOnFailureListener { e ->
+                                        isLoading = false
+                                        Toast.makeText(context, "Грешка при бришење: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                    }
+                            } else {
+                                isLoading = false
+                                Toast.makeText(context, context.getString(R.string.error_firebase), Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } else {
+                        // СТАНДАРДНА НАЈАВА (Твојот оригинален код)
+                        authManager.signInWithGoogle(idToken) { success ->
+                            isLoading = false
+                            if (success) {
+                                onLoginSuccess()
+                            } else {
+                                Toast.makeText(context, context.getString(R.string.error_firebase), Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
+
                 } else {
                     isLoading = false
                     Toast.makeText(context, context.getString(R.string.error_google_token), Toast.LENGTH_SHORT).show()
@@ -138,18 +159,16 @@ fun LoginScreen(
 
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         if (isTabletOrLandscape) {
-            // РАСПОРЕД ЗА ТАБЛЕТ / ЛЕНДСКЕЈП (Два панели)
             Row(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                // ЛЕВ ПАНЕЛ: Бренд елементи со позадина
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .background(EmeraldLight), // Нежна зелена позадина
+                        .background(EmeraldLight),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -174,7 +193,6 @@ fun LoginScreen(
                     }
                 }
 
-                // ДЕСЕН ПАНЕЛ: Форма за најава (скролабилна)
                 Box(
                     modifier = Modifier
                         .weight(1.2f)
@@ -209,7 +227,8 @@ fun LoginScreen(
                                 isRegistering = it
                                 name = ""; email = ""; password = ""
                             },
-                            onLoadingChange = { isLoading = it }
+                            onLoadingChange = { isLoading = it },
+                            isTabletOrLandscape = true
                         )
                     }
                 }
@@ -268,7 +287,8 @@ fun LoginScreen(
                             isRegistering = it
                             name = ""; email = ""; password = ""
                         },
-                        onLoadingChange = { isLoading = it }
+                        onLoadingChange = { isLoading = it },
+                        isTabletOrLandscape = false
                     )
                 }
             }
@@ -293,7 +313,8 @@ fun LoginFormContent(
     googleSignInLauncher: ActivityResultLauncher<Intent>,
     onLoginSuccess: () -> Unit,
     onIsRegisteringChange: (Boolean) -> Unit,
-    onLoadingChange: (Boolean) -> Unit
+    onLoadingChange: (Boolean) -> Unit,
+    isTabletOrLandscape: Boolean
 ) {
     Text(
         text = if (isRegistering) stringResource(R.string.create_account) else stringResource(R.string.welcome_back),
@@ -344,7 +365,14 @@ fun LoginFormContent(
     )
 
     if (isLoading) {
-        CircularProgressIndicator(color = EmeraldPrimary)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = EmeraldPrimary)
+        }
     } else {
         Button(
             onClick = {
@@ -357,7 +385,7 @@ fun LoginFormContent(
                             onLoginSuccess()
                         } else {
                             // Ја користиме getErrorMessage за убави пораки на македонски
-                            val localizedError = authManager.getErrorMessage(exception as? Exception, context)
+                            val localizedError = authManager.getErrorMessage(exception as? Exception)
                             Toast.makeText(context, localizedError, Toast.LENGTH_LONG).show()
                         }
                     }
@@ -368,7 +396,7 @@ fun LoginFormContent(
                         if (success) {
                             onLoginSuccess()
                         } else {
-                            val localizedError = authManager.getErrorMessage(exception as? Exception, context)
+                            val localizedError = authManager.getErrorMessage(exception as? Exception)
                             Toast.makeText(context, localizedError, Toast.LENGTH_LONG).show()
                         }
                     }
@@ -401,6 +429,7 @@ fun LoginFormContent(
         Spacer(modifier = Modifier.height(20.dp))
 
         SocialLoginButtons(
+            isTabletOrLandscape = isTabletOrLandscape,
             onGoogleClick = {
                 onLoadingChange(true)
                 val signInIntent = authManager.getGoogleSignInClient().signInIntent
@@ -426,7 +455,6 @@ fun LoginFormContent(
                 authManager.signInAnonymously { success ->
                     onLoadingChange(false)
                     if (success) {
-                        // 🛠️ Исчистено: saveUserToFirestore веќе се повикува внатре во signInAnonymously!
                         onLoginSuccess()
                     } else {
                         Toast.makeText(context, context.getString(R.string.error_guest), Toast.LENGTH_SHORT).show()
@@ -454,36 +482,70 @@ fun LoginFormContent(
 
 @Composable
 fun SocialLoginButtons(
+    isTabletOrLandscape: Boolean,
     onGoogleClick: () -> Unit,
     onFacebookClick: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        OutlinedButton(
-            onClick = onGoogleClick,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.dp, SlateSecondary)
+    if (isTabletOrLandscape) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(painter = painterResource(id = R.drawable.google_logo), contentDescription = null, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(12.dp))
-                Text(stringResource(R.string.signin_google), color = Black)
+            OutlinedButton(
+                onClick = onGoogleClick,
+                modifier = Modifier.weight(1f).height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, SlateSecondary)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(painter = painterResource(id = R.drawable.google_logo), contentDescription = null, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.signin_google), color = Black, maxLines = 1)
+                }
+            }
+
+            Button(
+                onClick = onFacebookClick,
+                modifier = Modifier.weight(1f).height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = FbBlue)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(painter = painterResource(id = R.drawable.facebook_logo), contentDescription = null, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.signin_fb), color = White, maxLines = 1)
+                }
             }
         }
-
-        Button(
-            onClick = onFacebookClick,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = FbBlue)
+    } else {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(painter = painterResource(id = R.drawable.facebook_logo), contentDescription = null, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(12.dp))
-                Text(stringResource(R.string.signin_fb), color = White)
+            OutlinedButton(
+                onClick = onGoogleClick,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, SlateSecondary)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(painter = painterResource(id = R.drawable.google_logo), contentDescription = null, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text(stringResource(R.string.signin_google), color = Black)
+                }
+            }
+
+            Button(
+                onClick = onFacebookClick,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = FbBlue)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(painter = painterResource(id = R.drawable.facebook_logo), contentDescription = null, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text(stringResource(R.string.signin_fb), color = White)
+                }
             }
         }
     }

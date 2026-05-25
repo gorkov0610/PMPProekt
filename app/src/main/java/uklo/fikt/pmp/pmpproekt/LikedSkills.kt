@@ -21,12 +21,14 @@ import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
 import uklo.fikt.pmp.pmpproekt.data.Skill
 import uklo.fikt.pmp.pmpproekt.data.toggleLikeSkill
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
+import java.net.URLEncoder.encode
 
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun LikedSkillsScreen(
     uid: String,
+    prefManager : PreferenceManager,
     databaseManager: DatabaseManager,
     onChatClick: (String, String) -> Unit
 ) {
@@ -80,7 +82,15 @@ fun LikedSkillsScreen(
 
                                 likedSkills = likedSkills.filter { it.id != skill.id }
                             },
-                            onChatClick = { onChatClick(skill.authorId, skill.authorName) }
+                            prefManager = prefManager,
+                            onChatClick = {
+                                val encodedName = try {
+                                    encode(skill.authorName, "UTF-8")
+                                }catch (e: Exception){
+                                    skill.authorName
+                                }
+                                onChatClick(skill.authorId, encodedName)
+                            }
                         )
                     }
                 }
@@ -97,7 +107,15 @@ fun LikedSkillsScreen(
                                 toggleLikeSkill(skill, uid, db, context)
                                 likedSkills = likedSkills.filter { it.id != skill.id }
                             },
-                            onChatClick = { onChatClick(skill.authorId, skill.authorName) }
+                            prefManager = prefManager,
+                            onChatClick = {
+                                val encodedName = try {
+                                    encode(skill.authorName, "UTF-8")
+                                }catch (e: Exception){
+                                    skill.authorName
+                                }
+                                onChatClick(skill.authorId, encodedName)
+                            }
                         )
                     }
                 }

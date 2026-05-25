@@ -28,21 +28,22 @@ fun sendEmailIntent(context: Context, receiverEmail: String, skillTitle: String)
 fun showLocalNotification(context: Context, title: String, message: String, senderId: String, senderName: String) {
     val channelId = "skillswap_messages"
     val notificationId = System.currentTimeMillis().toInt()
-
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    val channel = NotificationChannel(
-        channelId,
-        "SkillSwap Chat Messages",
-        NotificationManager.IMPORTANCE_HIGH
-    ).apply {
-        description = "Notification channel for real-time chat messages"
-        enableLights(true)
-        enableVibration(true)
+    if (notificationManager.getNotificationChannel(channelId) == null) {
+        val channel = NotificationChannel(
+            channelId,
+            "SkillSwap Chat Messages",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Notification channel for real-time chat messages"
+            enableLights(true)
+            enableVibration(true)
+        }
+        notificationManager.createNotificationChannel(channel)
     }
-    notificationManager.createNotificationChannel(channel)
 
-    Uri.encode(senderName)
+
     val intent = if (senderId.isNotEmpty()) {
         // АКО Е ЧАТ: Оди во соодветната соба
         val encodedName = Uri.encode(senderName)
@@ -66,7 +67,7 @@ fun showLocalNotification(context: Context, title: String, message: String, send
 
     // 3. ИЗГРАДБА НА НОТИФИКАЦИЈАТА СО PENDING INTENT
     val builder = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(android.R.drawable.stat_notify_chat)
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
         .setContentTitle(title)
         .setContentText(message)
         .setPriority(NotificationCompat.PRIORITY_HIGH)

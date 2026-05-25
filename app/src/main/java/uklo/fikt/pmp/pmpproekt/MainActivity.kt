@@ -1,10 +1,7 @@
 package uklo.fikt.pmp.pmpproekt
 
 import android.annotation.SuppressLint
-import android.net.Uri
 import android.os.Bundle
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -54,9 +51,11 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -70,6 +69,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.delay
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
@@ -92,7 +95,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             PMPProektTheme {
                 val authManager = remember { AuthManager(applicationContext) }
-                var user by remember { mutableStateOf<com.google.firebase.auth.FirebaseUser?>(null) }
+                val dbManager = remember { DatabaseManager() }
+                val prefManager = PreferenceManager(applicationContext)
+                var user by remember { mutableStateOf<FirebaseUser?>(null) }
 
                 var isCheckingAuth by remember { mutableStateOf(true) }
 
@@ -118,6 +123,9 @@ class MainActivity : ComponentActivity() {
                             })
                         } else {
                             MainContent(
+                                authManager = authManager,
+                                prefManager = prefManager,
+                                dbManager = dbManager,
                                 email = user?.email ?: stringResource(R.string.user)
                             )
                         }
@@ -132,11 +140,14 @@ class MainActivity : ComponentActivity() {
 @Suppress("UNUSED_VALUE", "AssignedValueIsNeverUsed", "RedundantSuppression")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainContent(email : String){
+fun MainContent(
+    email : String,
+    prefManager : PreferenceManager,
+    authManager : AuthManager,
+    dbManager : DatabaseManager
+){
     val navController = rememberNavController()
     val context = LocalContext.current
-    val dbManager = remember { DatabaseManager() }
-    val authManager = remember { AuthManager(context) }
     val defaultUsername = stringResource(R.string.user)
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -146,15 +157,15 @@ fun MainContent(email : String){
     val currentUserId = currentUser?.uid ?: ""
 
     DisposableEffect(currentUserId) {
-        var listenerRegistration: com.google.firebase.firestore.ListenerRegistration? = null
+        var listenerRegistration: ListenerRegistration? = null
 
         if (currentUserId.isNotEmpty()) {
-            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val db = FirebaseFirestore.getInstance()
             Log.d("GLOBAL_FCM", "Активиран нов прецизен слушател за: $currentUserId")
 
             listenerRegistration = db.collectionGroup("messages")
                 .whereEqualTo("receiverId", currentUserId)
-                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .orderBy("timestamp",Query.Direction.DESCENDING)
                 .limit(1)
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) {
@@ -173,7 +184,7 @@ fun MainContent(email : String){
 
                         if (senderId != currentUserId && !isFromCache) {
                             showLocalNotification(
-                                context = context,
+                                context = context.applicationContext,
                                 title = context.getString(R.string.new_message, senderName),
                                 message = text,
                                 senderId = senderId,
@@ -202,7 +213,7 @@ fun MainContent(email : String){
                         }
                     }
                 )
-            } else if (currentRoute == "inbox") {
+            } else if (currentRoute == Screen.Inbox.route) {
                 TopAppBar(
                     title = { Text(text = stringResource(R.string.inbox_title), color = White, fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
@@ -234,7 +245,7 @@ fun MainContent(email : String){
                         }
                     }
                 )
-            }else if (currentRoute == "profile") {
+            }else if (currentRoute == Screen.Profile.route) {
                 TopAppBar(
                     title = { Text(text = stringResource(R.string.top_bar_profile), color = White, fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
@@ -244,7 +255,7 @@ fun MainContent(email : String){
                         }
                     }
                 )
-            } else if (currentRoute == "my_skills") {
+            } else if (currentRoute == Screen.MySkills.route) {
                 TopAppBar(
                     title = { Text(text = stringResource(R.string.label_my_posts), color = White, fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
@@ -254,7 +265,7 @@ fun MainContent(email : String){
                         }
                     }
                 )
-            } else if (currentRoute == "liked_skills") {
+            } else if (currentRoute == Screen.LikedSkills.route) {
                 TopAppBar(
                     title = { Text(text = stringResource(R.string.label_saved_posts), color = White, fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
@@ -299,22 +310,29 @@ fun MainContent(email : String){
                     fadeOut(animationSpec = tween(350)) + scaleOut(targetScale = 0.95f, animationSpec = tween(350))
                 }
             ) {
-
+                composable(Screen.Login.route) {
+                    LoginScreen(
+                        authManager = authManager,
+                        onLoginSuccess = {
+                            navController.navigate(Screen.Feed.route) {
+                                popUpTo(Screen.Login.route) { inclusive = true }
+                            }
+                        }
+                    )
+                }
                 composable(Screen.Feed.route) {
                     SkillFeed(
                         dbManager,
                         authManager,
                         onChatClick = { skill ->
-                            val encodeName = Uri.encode(skill.authorName)
-                            navController.navigate(Screen.Chat.createRoute(skill.authorId,encodeName))
+                            navController.navigate(Screen.Chat.createRoute(skill.authorId,skill.authorName))
                         })
                 }
                 composable(Screen.Inbox.route) {
                     InboxScreen(
                         authManager = authManager,
                         onChatClick = { receiverId, name ->
-                            val encodeName = Uri.encode(name)
-                            navController.navigate(Screen.Chat.createRoute(receiverId, encodeName))
+                            navController.navigate(Screen.Chat.createRoute(receiverId, name))
                         }
                     )
                 }
@@ -330,6 +348,7 @@ fun MainContent(email : String){
                         onMySkillsClick = {
                             navController.navigate(Screen.MySkills.route)
                         },
+                        dbManager = dbManager,
                         onLikedSkillsClick = {
                             navController.navigate(Screen.LikedSkills.route)
                         }
@@ -346,8 +365,9 @@ fun MainContent(email : String){
                     LikedSkillsScreen(
                         uid = uid,
                         onChatClick = { authorId, authorName ->
-                            navController.navigate("chat/$authorId/$authorName")
+                            navController.navigate(Screen.Chat.createRoute(authorId,authorName))
                         },
+                        prefManager = prefManager,
                         databaseManager = dbManager
                     )
                 }
@@ -398,13 +418,15 @@ fun AddSkillDialog(
     var desc by rememberSaveable { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
 
-    val categoryOptions = listOf(
-        CategoryItem("GENERAL", R.string.cat_general),
-        CategoryItem("MUSIC", R.string.cat_music),
-        CategoryItem("TECH", R.string.cat_tech),
-        CategoryItem("LANG", R.string.cat_languages),
-        CategoryItem("SPORTS", R.string.cat_sports)
-    )
+    val categoryOptions = remember {
+        listOf(
+            CategoryItem("GENERAL", R.string.cat_general),
+            CategoryItem("MUSIC", R.string.cat_music),
+            CategoryItem("TECH", R.string.cat_tech),
+            CategoryItem("LANG", R.string.cat_languages),
+            CategoryItem("SPORTS", R.string.cat_sports)
+        )
+    }
 
     var selectedCategoryId by rememberSaveable { mutableStateOf("GENERAL") }
 
@@ -421,7 +443,9 @@ fun AddSkillDialog(
 
                 if (isTablet) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Max),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
@@ -439,13 +463,17 @@ fun AddSkillDialog(
                                     label = { Text(stringResource(R.string.category_label)) },
                                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                                     modifier = Modifier
-                                        .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
+                                        .menuAnchor(
+                                            type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                            enabled = true
+                                        )
                                         .fillMaxWidth(),
                                     shape = RoundedCornerShape(12.dp)
                                 )
                                 ExposedDropdownMenu(
                                     expanded = expanded,
-                                    onDismissRequest = { expanded = false }
+                                    onDismissRequest = { expanded = false },
+                                    modifier = Modifier.exposedDropdownSize(true)
                                 ) {
                                     categoryOptions.forEach { item ->
                                         DropdownMenuItem(
@@ -500,7 +528,10 @@ fun AddSkillDialog(
                                 label = { Text(stringResource(R.string.category_label)) },
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                                 modifier = Modifier
-                                    .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
+                                    .menuAnchor(
+                                        type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                        enabled = true
+                                    )
                                     .fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp)
                             )
@@ -547,7 +578,7 @@ fun AddSkillDialog(
                         val currentUser = authManager.getCurrentUser()
                         val currentUserId = currentUser?.uid ?: ""
 
-                        val firestoreDb = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        val firestoreDb = FirebaseFirestore.getInstance()
                         firestoreDb.collection("users").document(currentUserId).get()
                             .addOnSuccessListener { document ->
                                 val actualName = if (document != null && document.exists()) {

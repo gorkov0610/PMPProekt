@@ -1,5 +1,6 @@
 package uklo.fikt.pmp.pmpproekt
 
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,9 +15,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.ui.theme.SlateDark
 import uklo.fikt.pmp.pmpproekt.ui.theme.SlateSecondary
+import java.net.URLEncoder.encode
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InboxScreen(
@@ -28,17 +32,26 @@ fun InboxScreen(
     val db = FirebaseFirestore.getInstance()
 
     // Слушај во реално време за сите соби каде моменталниот корисник е во "participants"
-    LaunchedEffect(currentUserId) {
+    DisposableEffect(currentUserId) {
+        var listenerRegistration: ListenerRegistration? = null
         if (currentUserId.isNotEmpty()) {
-            db.collection("chats")
+            listenerRegistration = db.collection("chats")
                 .whereArrayContains("participants", currentUserId)
-                .addSnapshotListener { snapshot, _ ->
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null) {
+                        Log.e("InboxScreen", "Грешка при слушање соби", e)
+                        return@addSnapshotListener
+                    }
                     if (snapshot != null) {
                         chatList = snapshot.documents
                             .mapNotNull { it.data }
                             .sortedByDescending { it["timestamp"] as? Long ?: 0L }
                     }
                 }
+        }
+
+        onDispose {
+            listenerRegistration?.remove()
         }
     }
 
@@ -76,7 +89,14 @@ fun InboxScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 6.dp)
-                                .clickable { onChatClick(receiverId, receiverName) },
+                                .clickable {
+                                    val encodedName = try {
+                                        encode(receiverName,"UTF-8")
+                                    } catch (e: Exception){
+                                        receiverName
+                                    }
+                                    onChatClick(receiverId, encodedName)
+                                },
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(

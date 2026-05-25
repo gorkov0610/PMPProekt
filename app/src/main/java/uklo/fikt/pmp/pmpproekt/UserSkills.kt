@@ -24,11 +24,14 @@ import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
-fun UserSkillsScreen(uid: String) {
+fun UserSkillsScreen(
+    uid: String,
+) {
     val context = LocalContext.current
     val db = remember { FirebaseFirestore.getInstance() }
     var mySkills by remember { mutableStateOf<List<Skill>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    val prefManager = remember { PreferenceManager(context) }
 
     // Состојби за дијалогот за измена
     var showEditDialog by rememberSaveable { mutableStateOf(false) }
@@ -64,7 +67,30 @@ fun UserSkillsScreen(uid: String) {
                 Text(text = stringResource(R.string.no_skills))
             }
         } else {
-            // 🛠️ НОВИОТ И ПРЕПОРАЧАН НАЧИН: Го мериме просторот преку BoxWithConstraints
+            val renderSkillCard: @Composable (Skill) -> Unit = { skill ->
+                SkillCard(
+                    skill = skill,
+                    prefManager = prefManager,
+                    onLikeClick = {},
+                    onChatClick = {},
+                    onEditClick = {
+                        editSkillId = skill.id
+                        editTitle = skill.title
+                        editDescription = skill.description
+                        showEditDialog = true
+                    },
+                    onDeleteClick = {
+                        db.collection("skills").document(skill.id).delete()
+                            .addOnSuccessListener {
+                                mySkills = mySkills.filter { it.id != skill.id }
+                                Toast.makeText(context, context.getString(R.string.label_delete_post_success), Toast.LENGTH_SHORT).show()
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(context, context.getString(R.string.error, e.localizedMessage ?: context.getString(R.string.error_unknown)), Toast.LENGTH_SHORT).show()
+                            }
+                    }
+                )
+            }
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val isTablet = maxWidth >= 600.dp // Сега користиме .dp директно!
                 val contentPadding = PaddingValues(16.dp)
@@ -79,27 +105,7 @@ fun UserSkillsScreen(uid: String) {
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         items(mySkills) { skill ->
-                            SkillCard(
-                                skill = skill,
-                                onLikeClick = {},
-                                onChatClick = {},
-                                onEditClick = {
-                                    editSkillId = skill.id
-                                    editTitle = skill.title
-                                    editDescription = skill.description
-                                    showEditDialog = true
-                                },
-                                onDeleteClick = {
-                                    db.collection("skills").document(skill.id).delete()
-                                        .addOnSuccessListener {
-                                            mySkills = mySkills.filter { it.id != skill.id }
-                                            Toast.makeText(context, context.getString(R.string.label_delete_post_success), Toast.LENGTH_SHORT).show()
-                                        }
-                                        .addOnFailureListener { e ->
-                                            Toast.makeText(context, context.getString(R.string.error, e.localizedMessage ?: context.getString(R.string.error_unknown)), Toast.LENGTH_SHORT).show()
-                                        }
-                                }
-                            )
+                            renderSkillCard(skill)
                         }
                     }
                 } else {
@@ -110,27 +116,7 @@ fun UserSkillsScreen(uid: String) {
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(mySkills) { skill ->
-                            SkillCard(
-                                skill = skill,
-                                onLikeClick = {},
-                                onChatClick = {},
-                                onEditClick = {
-                                    editSkillId = skill.id
-                                    editTitle = skill.title
-                                    editDescription = skill.description
-                                    showEditDialog = true
-                                },
-                                onDeleteClick = {
-                                    db.collection("skills").document(skill.id).delete()
-                                        .addOnSuccessListener {
-                                            mySkills = mySkills.filter { it.id != skill.id }
-                                            Toast.makeText(context, context.getString(R.string.label_delete_post_success), Toast.LENGTH_SHORT).show()
-                                        }
-                                        .addOnFailureListener { e ->
-                                            Toast.makeText(context, context.getString(R.string.error, e.localizedMessage ?: context.getString(R.string.error_unknown)), Toast.LENGTH_SHORT).show()
-                                        }
-                                }
-                            )
+                            renderSkillCard(skill)
                         }
                     }
                 }

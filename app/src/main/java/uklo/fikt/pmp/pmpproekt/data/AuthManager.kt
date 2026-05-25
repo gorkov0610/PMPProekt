@@ -11,6 +11,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FacebookAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
@@ -18,27 +19,61 @@ import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.userProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import uklo.fikt.pmp.pmpproekt.R
 
 @Suppress("DEPRECATION")
-class AuthManager(private val context: Context) {
+class AuthManager(context: Context) {
+    private val appContext = context.applicationContext
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val callbackManager = CallbackManager.Factory.create()
     private val db = FirebaseFirestore.getInstance()
+    private var isDeletingAccountMode: Boolean = false
 
     fun getCallbackManager() = callbackManager
     fun getCurrentUser() = auth.currentUser
-    fun signOut() = auth.signOut()
 
-    fun saveUserToFirestore(customName: String? = null) { // 🛠️ Го тргаме customUsername
+    fun setIsDeletingFlag(value: Boolean) {
+        isDeletingAccountMode = value
+    }
+    fun isDeletingFlag(): Boolean {
+        return isDeletingAccountMode
+    }
+    fun signOut(onComplete: (Boolean) -> Unit = {}) {
+        val currentUser = auth.currentUser
+
+        if (currentUser != null) {
+            val userId = currentUser.uid
+            db.collection("users").document(userId)
+                .update("fcmToken", "")
+                .addOnCompleteListener { task ->
+                    auth.signOut()
+                    LoginManager.getInstance().logOut()
+
+                    if (task.isSuccessful) {
+                        Log.d("AuthManager", "FCM Токенот е успешно избришан при одјава.")
+                    } else {
+                        Log.e("AuthManager", "Грешка при бришење на FCM токен", task.exception)
+                    }
+
+                    onComplete(task.isSuccessful)
+                }
+        } else {
+            auth.signOut()
+            LoginManager.getInstance().logOut()
+            onComplete(true)
+        }
+    }
+
+    fun saveUserToFirestore(customName: String? = null) {
         val currentUser = auth.currentUser ?: return
         val userId = currentUser.uid
 
         val finalName = customName
             ?: currentUser.displayName
-            ?: if (currentUser.isAnonymous) context.getString(R.string.chat_loading) else context.getString(R.string.user)
+            ?: if (currentUser.isAnonymous) appContext.getString(R.string.chat_loading) else appContext.getString(R.string.user)
 
         val finalProfilePicture = if (currentUser.photoUrl != null) {
             currentUser.photoUrl.toString()
@@ -85,10 +120,10 @@ class AuthManager(private val context: Context) {
 
     fun getGoogleSignInClient(): GoogleSignInClient {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(context.getString(R.string.default_web_client_id))
+            .requestIdToken(appContext.getString(R.string.default_web_client_id))
             .requestEmail()
             .build()
-        return GoogleSignIn.getClient(context, gso)
+        return GoogleSignIn.getClient(appContext, gso)
     }
 
     fun signInWithGoogle(idToken: String, onResult: (Boolean) -> Unit) {
@@ -117,10 +152,17 @@ class AuthManager(private val context: Context) {
         auth.createUserWithEmailAndPassword(email, pass)
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
-                    // 🛠️ Праќаме име и презиме за да генерира точни иницијали
-                    saveUserToFirestore(customName = name)
+                    val profileUpdates = userProfileChangeRequest {
+                        displayName = name
+                    }
+                    auth.currentUser?.updateProfile(profileUpdates)
+                        ?.addOnCompleteListener {
+                            saveUserToFirestore(customName = name)
+                            onResult(true, null)
+                        }
+                } else {
+                    onResult(false, task.exception)
                 }
-                onResult(task.isSuccessful, task.exception)
             }
     }
 
@@ -128,21 +170,41 @@ class AuthManager(private val context: Context) {
         auth.signInWithEmailAndPassword(email, pass)
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
-                    saveUserToFirestore() // 🛠️ Се повикува за секој случај да ги освежи податоците
+                    saveUserToFirestore()
                 }
                 onResult(task.isSuccessful, task.exception)
             }
     }
+    fun reauthenticateAndIdDeleteWithEmail(password: String, onComplete: (Boolean, String?) -> Unit) {
+        val user = auth.currentUser
+        val email = user?.email
 
-    fun getErrorMessage(exception: Exception?, context: Context): String {
-        if (exception == null) return context.getString(R.string.error_unknown)
+        if (email != null && user != null) {
+            val credential = EmailAuthProvider.getCredential(email, password)
+
+            // 1. Повторно го најавуваме со лозинката што ја внесе во дијалогот
+            user.reauthenticate(credential)
+                .addOnSuccessListener {
+                    // 2. Сесијата е сега свежа, веднаш го бришеме
+                    user.delete()
+                        .addOnSuccessListener { onComplete(true, null) }
+                        .addOnFailureListener { e -> onComplete(false, e.localizedMessage) }
+                }
+                .addOnFailureListener { e -> onComplete(false, e.localizedMessage) }
+        } else {
+            onComplete(false, "Нема најавен корисник.")
+        }
+    }
+
+    fun getErrorMessage(exception: Exception?): String {
+        if (exception == null) return appContext.getString(R.string.error_unknown)
         return when (exception) {
-            is FirebaseAuthWeakPasswordException -> context.getString(R.string.error_weak_password)
-            is FirebaseAuthUserCollisionException -> context.getString(R.string.error_user_collision)
-            is FirebaseAuthInvalidUserException -> context.getString(R.string.error_user_not_found)
-            is FirebaseAuthInvalidCredentialsException -> context.getString(R.string.error_wrong_password)
-            is FirebaseNetworkException -> context.getString(R.string.error_network)
-            else -> context.getString(R.string.error_unknown)
+            is FirebaseAuthWeakPasswordException -> appContext.getString(R.string.error_weak_password)
+            is FirebaseAuthUserCollisionException -> appContext.getString(R.string.error_user_collision)
+            is FirebaseAuthInvalidUserException -> appContext.getString(R.string.error_user_not_found)
+            is FirebaseAuthInvalidCredentialsException -> appContext.getString(R.string.error_wrong_password)
+            is FirebaseNetworkException -> appContext.getString(R.string.error_network)
+            else -> appContext.getString(R.string.error_unknown)
         }
     }
 }

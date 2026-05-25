@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -43,16 +44,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
 import com.google.firebase.firestore.FirebaseFirestore
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
 import uklo.fikt.pmp.pmpproekt.ui.theme.Black
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
 import uklo.fikt.pmp.pmpproekt.ui.theme.RedCoral
-import uklo.fikt.pmp.pmpproekt.ui.theme.RedCoralDim
 import uklo.fikt.pmp.pmpproekt.ui.theme.SlateDark
 import uklo.fikt.pmp.pmpproekt.ui.theme.SlateSecondary
 import uklo.fikt.pmp.pmpproekt.ui.theme.White
@@ -61,16 +64,20 @@ import uklo.fikt.pmp.pmpproekt.ui.theme.White
 @Composable
 fun ProfileScreen(
     authManager: AuthManager,
+    dbManager: DatabaseManager,
     onMySkillsClick: () -> Unit,
     onLikedSkillsClick: () -> Unit,
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
-    val dbManager = remember { DatabaseManager() } // 🛠️ ПОПРАВКА 1: Креиран менаџер за базата
     val currentUser = authManager.getCurrentUser()
     val uid = currentUser?.uid ?: ""
+
+    // Состојби за менаџирање на дијалозите за бришење
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var confirmPassword by remember { mutableStateOf("") }
 
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf(currentUser?.email ?: "") }
@@ -240,16 +247,8 @@ fun ProfileScreen(
                                             ).show()
                                         }
                                         .addOnFailureListener { e ->
-                                            val errorTemplate = context.getString(R.string.error)
-                                            val errorMessage = e.localizedMessage
-                                                ?: context.getString(R.string.error_unknown)
-
-                                            val finalMessage =
-                                                if (errorTemplate.contains($$"%1$s")) {
-                                                    errorTemplate.replace($$"%1$s", errorMessage)
-                                                } else {
-                                                    errorTemplate.replace("%s", errorMessage)
-                                                }
+                                            val errorMessage = e.localizedMessage ?: context.getString(R.string.error_unknown)
+                                            val finalMessage = context.getString(R.string.error, errorMessage)
 
                                             Toast.makeText(
                                                 context,
@@ -299,7 +298,7 @@ fun ProfileScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.weight(1f))
+                    Spacer(modifier = Modifier.height(32.dp))
 
                     Button(
                         onClick = { showDeleteDialog = true },
@@ -315,6 +314,7 @@ fun ProfileScreen(
                     }
                 }
 
+                // ПРВ ДИЈАЛОГ: Првична потврда за бришење
                 if (showDeleteDialog) {
                     AlertDialog(
                         onDismissRequest = { showDeleteDialog = false },
@@ -333,8 +333,10 @@ fun ProfileScreen(
                                     showDeleteDialog = false
 
                                     if (currentUser != null && currentUser.uid.isNotEmpty()) {
+                                        // 1. Прво ги бришеме неговите податоци од Firestore
                                         dbManager.deleteUserData(currentUser.uid) { success ->
                                             if (success) {
+                                                // 2. Откако базата е чиста, го бришеме од Auth
                                                 currentUser.delete()
                                                     .addOnCompleteListener { task ->
                                                         if (task.isSuccessful) {
@@ -345,13 +347,26 @@ fun ProfileScreen(
                                                             ).show()
                                                             onLogout()
                                                         } else {
-                                                            Toast.makeText(
-                                                                context,
-                                                                context.getString(R.string.label_delete_login_again),
-                                                                Toast.LENGTH_LONG
-                                                            ).show()
-                                                            authManager.signOut()
-                                                            onLogout()
+                                                            // СЕСИЈАТА Е ЗАСТАРЕНА (Потребна е ре-автентикација)
+                                                            if (task.exception is FirebaseAuthRecentLoginRequiredException) {
+                                                                val providerId = currentUser.providerData.getOrNull(1)?.providerId
+
+                                                                if (providerId == "google.com") {
+                                                                    // Спремање за Google бришење преку LoginScreen
+                                                                    authManager.setIsDeletingFlag(true)
+                                                                    authManager.signOut()
+                                                                    onLogout() // Пренасочува на најава
+                                                                } else {
+                                                                    // Го отвораме дијалогот за внес на лозинка (за Email корисници)
+                                                                    showPasswordDialog = true
+                                                                }
+                                                            } else {
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    task.exception?.localizedMessage ?: context.getString(R.string.error_unknown),
+                                                                    Toast.LENGTH_LONG
+                                                                ).show()
+                                                            }
                                                         }
                                                     }
                                             } else {
@@ -370,6 +385,64 @@ fun ProfileScreen(
                         },
                         dismissButton = {
                             TextButton(onClick = { showDeleteDialog = false }) {
+                                Text(stringResource(R.string.btn_cancel), color = SlateSecondary)
+                            }
+                        }
+                    )
+                }
+
+                // ВТОР ДИЈАЛОГ: Барање лозинка за ре-автентикација на Email корисници
+                if (showPasswordDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showPasswordDialog = false },
+                        title = { Text("Потврда на идентитет", fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column {
+                                Text("Поради безбедносни причини, внесете ја вашата лозинка за да го потврдите бришењето на профилот:")
+                                Spacer(modifier = Modifier.height(12.dp))
+                                OutlinedTextField(
+                                    value = confirmPassword,
+                                    onValueChange = { confirmPassword = it },
+                                    label = { Text(stringResource(R.string.label_password)) },
+                                    singleLine = true,
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                colors = ButtonDefaults.buttonColors(containerColor = RedCoral),
+                                onClick = {
+                                    if (confirmPassword.isNotBlank()) {
+                                        authManager.reauthenticateAndIdDeleteWithEmail(confirmPassword) { emailSuccess, errorMsg ->
+                                            if (emailSuccess) {
+                                                showPasswordDialog = false
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.label_delete_success),
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                                onLogout()
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    errorMsg ?: context.getString(R.string.error_unknown),
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                        }
+                                    } else {
+                                        Toast.makeText(context, context.getString(R.string.error_empty_field), Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            ) {
+                                Text("Потврди и Избриши", color = White)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showPasswordDialog = false }) {
                                 Text(stringResource(R.string.btn_cancel), color = SlateSecondary)
                             }
                         }

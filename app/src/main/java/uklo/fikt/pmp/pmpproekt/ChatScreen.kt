@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,7 +19,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.google.firebase.firestore.FirebaseFirestore
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
 import uklo.fikt.pmp.pmpproekt.data.Message
@@ -101,36 +101,28 @@ fun ChatScreen(
     var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
     var textState by remember { mutableStateOf("") }
 
+    val listState = rememberLazyListState()
+
     val chatRoomId = remember(receiverId) {
         if (currentUserId < receiverId) "${currentUserId}_${receiverId}" else "${receiverId}_${currentUserId}"
     }
 
-    LaunchedEffect(chatRoomId) {
-        databaseManager.listenForMessages(chatRoomId) { updatedMessages ->
+    DisposableEffect(chatRoomId) {
+        val listenerRegistration = databaseManager.listenForMessages(chatRoomId){ updatedMessages ->
             messages = updatedMessages
+        }
+
+        onDispose {
+            listenerRegistration.remove()
         }
     }
 
-    LaunchedEffect(currentUserId, receiverId) {
-        val db = FirebaseFirestore.getInstance()
-        if (currentUserId.isNotEmpty()) {
-            db.collection("users").document(currentUserId).get()
-                .addOnSuccessListener { document ->
-                    if (document != null && document.exists()) {
-                        currentUserName = document.getString("name") ?: document.getString("username") ?: context.getString(R.string.user)
-                    }
-                }
-        }
-        if (receiverId.isNotEmpty()) {
-            db.collection("users").document(receiverId).get()
-                .addOnSuccessListener { document ->
-                    if (document != null && document.exists()) {
-                        // Провери дали во твојата 'users' колекција клучот се вика "photoUrl" или "profilePicture"
-                        receiverPhotoUrl = document.getString("profilePicture")
-                    }
-                }
+    LaunchedEffect(messages.size) {
+        if(messages.isNotEmpty()){
+            listState.animateScrollToItem(messages.size - 1)
         }
     }
+
 
     Box(
         modifier = Modifier.fillMaxSize().imePadding(),
@@ -144,6 +136,7 @@ fun ChatScreen(
         ) {
 
             LazyColumn(
+                state = listState,
                 modifier = Modifier.weight(1f).imeNestedScroll(),
                 reverseLayout = false
             ) {

@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import uklo.fikt.pmp.pmpproekt.ui.theme.EmeraldPrimary
 import uklo.fikt.pmp.pmpproekt.ui.theme.White
 
@@ -37,14 +38,18 @@ fun SplashScreen(onTimeout: () -> Unit) {
     val alpha = remember { Animatable(0f) }
 
     LaunchedEffect(key1 = true) {
-        scale.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 800)
-        )
-        alpha.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 800)
-        )
+        launch{
+            scale.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 800)
+            )
+        }
+        launch{
+            alpha.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 800)
+            )
+        }
 
         delay(2500)
         onTimeout()

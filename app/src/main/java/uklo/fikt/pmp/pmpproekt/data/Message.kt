@@ -7,6 +7,4 @@ data class Message(
     val timestamp: Long = 0L,
     val senderPhotoUrl : String = "",
     val senderName: String = ""
-){
-    constructor() : this("","","",0L,"","")
-}
+)
