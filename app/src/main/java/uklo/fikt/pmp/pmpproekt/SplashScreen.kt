@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -23,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -60,28 +60,20 @@ fun SplashScreen(onTimeout: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Box(
+            Icon(
+                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                contentDescription = stringResource(R.string.app_name),
+                tint = White,
                 modifier = Modifier
-                    .size(130.dp)
+                    .size(160.dp)
                     .scale(scale.value)
                     .alpha(alpha.value)
-                    .background(White, shape = RoundedCornerShape(32.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    // Системска икона за размена/споделување
-                    painter = painterResource(id = android.R.drawable.ic_menu_share),
-                    contentDescription = "SkillSwap Logo",
-                    tint = EmeraldPrimary,
-                    modifier = Modifier.size(64.dp)
-                )
-            }
+            )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // 🛠️ ИМЕТО НА АПЛИКАЦИЈАТА
             Text(
-                text = "SkillSwap",
+                text = stringResource(R.string.app_name),
                 color = White,
                 fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
@@ -91,9 +83,8 @@ fun SplashScreen(onTimeout: () -> Unit) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Кратко убаво мото
             Text(
-                text = "Размени вештини, научи повеќе",
+                text = stringResource(R.string.slogan),
                 color = White.copy(alpha = 0.7f),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,

@@ -32,16 +32,13 @@
     <string name="notification_like_title">Јубилеен лајк!</string>
     <string name="notification_like_message">Огласот \"%1$s\" достигна %2$d лајкови!</string>
     <string name="chat">Чет</string>
-    <string name="chat_with">Разговор со</string>
     <string name="chat_loading">Вчитување…</string>
     <string name="type_message">Напиши порака…</string>
     <string name="new_message">Нова порака од %1$s</string>
     <string name="default_message_text">Нова порака.</string>
     <string name="default_sender_name">Некој</string>
-    <string name="open_chat">Отвори разговор</string>
     <string name="inbox_title">Мои разговори</string>
     <string name="no_chats">Немате активни разговори.</string>
-    <string name="me">Јас</string>
     <string name="saved_changes">Промените се зачувани!</string>
     <string name="label_email">Е-пошта</string>
     <string name="label_password">Лозинка</string>
@@ -57,6 +54,7 @@
     <string name="label_edit_post_success">Огласот е изменет.</string>
     <string name="label_delete_login_again">Поради безбедност, најавете се повторно пред да го избришете профилот.</string>
     <string name="label_no_liked_posts">Нема зачувани огласи.</string>
+    <string name="top_bar_profile">Мој профил</string>
     <string name="btn_login">Најави се</string>
     <string name="btn_logout">Одјави се</string>
     <string name="btn_register">Креирај профил</string>
@@ -79,7 +77,6 @@
     <string name="desc_delete">Избриши</string>
     <string name="desc_edit">Измени</string>
     <string name="desc_profile_pic">Профилна слика</string>
-    <string name="error_invalid_email">Внесете валидна е-пошта.</string>
     <string name="error_weak_password">Лозинката мора да има најмалку 6 карактери.</string>
     <string name="error_wrong_password">Погрешна лозинка. Обидете се повторно.</string>
     <string name="error_user_not_found">Не постои корисник со оваа е-пошта.</string>
@@ -89,7 +86,6 @@
     <string name="error_empty_field">Пополнете ги сите полиња</string>
     <string name="error_loading_data">Грешка при вчитување на податоците</string>
     <string name="error">Грешка: %1$s</string>
-    <string name="error_login">Неуспешна најава: </string>
     <string name="error_fb">Facebook грешка: </string>
     <string name="error_guest">Неуспешна најава како гостин</string>
     <string name="error_google_token">Не е пронајден Google токен</string>

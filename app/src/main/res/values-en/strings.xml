@@ -33,15 +33,12 @@
     <string name="notification_like_message">The skill \"%1$s\" has reached %2$d likes!</string>
     <string name="chat">Chat</string>
     <string name="chat_loading">Loading…</string>
-    <string name="chat_with">Chat with</string>
     <string name="type_message">Type a message…</string>
     <string name="new_message">New message from %1$s </string>
     <string name="default_message_text">New message.</string>
     <string name="default_sender_name">Someone</string>
-    <string name="open_chat">Open chat</string>
     <string name="inbox_title">My chat</string>
     <string name="no_chats">No active chats.</string>
-    <string name="me">Me</string>
     <string name="saved_changes">Changes saved!</string>
     <string name="label_email">E-mail</string>
     <string name="label_password">Password</string>
@@ -57,6 +54,7 @@
     <string name="label_edit_post_success">Post edited.</string>
     <string name="label_delete_login_again">Log in again to delete your profile, for safety reasons.</string>
     <string name="label_no_liked_posts">No liked posts.</string>
+    <string name="top_bar_profile">My profile</string>
     <string name="btn_login">Log in</string>
     <string name="btn_logout">Log out</string>
     <string name="btn_register">Create profile</string>
@@ -80,7 +78,6 @@
     <string name="desc_edit">Edit</string>
     <string name="desc_profile_pic">Profile picture</string>
     <string name="error_weak_password">The password must be at least 6 characters long.</string>
-    <string name="error_invalid_email">Enter a valid e-mail address.</string>
     <string name="error_wrong_password">Wrong password. Try again</string>
     <string name="error_user_not_found">This e-mail is not linked to any account.</string>
     <string name="error_network">Network problem.</string>
@@ -89,7 +86,6 @@
     <string name="error_empty_field">Please enter e-mail and password.</string>
     <string name="error_loading_data">Couldn\'t load user data</string>
     <string name="error">Error: %1$s</string>
-    <string name="error_login">Unsuccessful login: </string>
     <string name="error_fb">Facebook error: </string>
     <string name="error_guest">Unsuccessful login as a guest</string>
     <string name="error_google_token">Google token not found</string>

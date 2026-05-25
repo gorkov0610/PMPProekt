@@ -9,6 +9,12 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -95,23 +101,26 @@ class MainActivity : ComponentActivity() {
                         delay(1000)
                         user = authManager.getCurrentUser()
                     }
-
                     isCheckingAuth = false
                 }
 
-                if (isCheckingAuth) {
-                    // Додека Firebase проверува, нашиот Splash Screen со лоадерот е активен
-                    SplashScreen(onTimeout = {})
-                } else {
-                    // Штом Firebase заврши со „вистинското вчитување“, веднаш се отвора соодветниот екран
-                    if (user == null) {
-                        LoginScreen(authManager = authManager, onLoginSuccess = {
-                            user = authManager.getCurrentUser()
-                        })
+                Crossfade(
+                    targetState = isCheckingAuth,
+                    animationSpec = tween(durationMillis = 800),
+                    label = "SplashToMainTransition"
+                ) { checking ->
+                    if (checking) {
+                        SplashScreen(onTimeout = {})
                     } else {
-                        MainContent(
-                            email = user?.email ?: stringResource(R.string.user)
-                        )
+                        if (user == null) {
+                            LoginScreen(authManager = authManager, onLoginSuccess = {
+                                user = authManager.getCurrentUser()
+                            })
+                        } else {
+                            MainContent(
+                                email = user?.email ?: stringResource(R.string.user)
+                            )
+                        }
                     }
                 }
             }
@@ -143,7 +152,6 @@ fun MainContent(email : String){
             val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
             Log.d("GLOBAL_FCM", "Активиран нов прецизен слушател за: $currentUserId")
 
-            // Го зачувуваме слушателот во променлива
             listenerRegistration = db.collectionGroup("messages")
                 .whereEqualTo("receiverId", currentUserId)
                 .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
@@ -162,7 +170,6 @@ fun MainContent(email : String){
                         val text = latestDoc.getString("text") ?: context.getString(R.string.default_message_text)
                         val senderName = latestDoc.getString("senderName") ?: context.getString(R.string.default_sender_name)
 
-                        Log.d("GLOBAL_FCM", "Фатена последна порака: '$text' (Кеш: $isFromCache)")
 
                         if (senderId != currentUserId && !isFromCache) {
                             showLocalNotification(
@@ -176,10 +183,7 @@ fun MainContent(email : String){
                     }
                 }
         }
-
-        // Оваа функција автоматски се повикува ТОКМУ при ротација на екранот!
         onDispose {
-            Log.d("GLOBAL_FCM", "Екранот се сврте или уништи. Го затвораме стариот Firebase слушател!")
             listenerRegistration?.remove()
         }
     }
@@ -232,7 +236,7 @@ fun MainContent(email : String){
                 )
             }else if (currentRoute == "profile") {
                 TopAppBar(
-                    title = { Text(text = "Мој Профил", color = White, fontWeight = FontWeight.Bold) },
+                    title = { Text(text = stringResource(R.string.top_bar_profile), color = White, fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
                     navigationIcon = {
                         IconButton(onClick = { navController.popBackStack() }) {
@@ -240,43 +244,23 @@ fun MainContent(email : String){
                         }
                     }
                 )
-            } else if (currentRoute == "my_ads") {
-                TopAppBar(
-                    title = { Text(text = "Мои Огласи", color = White, fontWeight = FontWeight.Bold) },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
-                    navigationIcon = {
-                        IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = White)
-                        }
-                    }
-                )
-            } else if (currentRoute == "liked_ads") {
-                TopAppBar(
-                    title = { Text(text = "Зачувани Огласи", color = White, fontWeight = FontWeight.Bold) },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
-                    navigationIcon = {
-                        IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = White)
-                        }
-                    }
-                )
             } else if (currentRoute == "my_skills") {
                 TopAppBar(
-                    title = { Text(text = "Мои Огласи", color = White, fontWeight = FontWeight.Bold) },
+                    title = { Text(text = stringResource(R.string.label_my_posts), color = White, fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
                     navigationIcon = {
                         IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = White)
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.desc_back), tint = White)
                         }
                     }
                 )
             } else if (currentRoute == "liked_skills") {
                 TopAppBar(
-                    title = { Text(text = "Зачувани Огласи", color = White, fontWeight = FontWeight.Bold) },
+                    title = { Text(text = stringResource(R.string.label_saved_posts), color = White, fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = EmeraldPrimary),
                     navigationIcon = {
                         IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = White)
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.desc_back), tint = White)
                         }
                     }
                 )
@@ -299,7 +283,22 @@ fun MainContent(email : String){
             .fillMaxSize()
             .background(BackgroundGray)) {
 
-            NavHost(navController, Screen.Feed.route) {
+            NavHost(
+                navController,
+                Screen.Feed.route,
+                enterTransition = {
+                    fadeIn(animationSpec = tween(350)) + scaleIn(initialScale = 0.95f, animationSpec = tween(350))
+                },
+                exitTransition = {
+                    fadeOut(animationSpec = tween(350)) + scaleOut(targetScale = 0.95f, animationSpec = tween(350))
+                },
+                popEnterTransition = {
+                    fadeIn(animationSpec = tween(350)) + scaleIn(initialScale = 0.95f, animationSpec = tween(350))
+                },
+                popExitTransition = {
+                    fadeOut(animationSpec = tween(350)) + scaleOut(targetScale = 0.95f, animationSpec = tween(350))
+                }
+            ) {
 
                 composable(Screen.Feed.route) {
                     SkillFeed(
