@@ -58,37 +58,54 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.util.Log
 import androidx.compose.runtime.*
+import com.google.firebase.Firebase
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.remoteconfig.remoteConfigSettings
+import com.google.firebase.remoteconfig.remoteConfig
 import kotlinx.coroutines.flow.first
 
 data class CategoryItem(
     val id: String,
     val nameRes: Int
 )
-
 class PreferenceManager(context: Context) {
-    private val sharedPreferences = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val sharedPreferences = appContext.getSharedPreferences("user_interest", Context.MODE_PRIVATE)
+    private val firebaseAnalytics = FirebaseAnalytics.getInstance(appContext)
+    private val remoteConfig = Firebase.remoteConfig.apply {
+        val configSettings = remoteConfigSettings {
+            minimumFetchIntervalInSeconds = 0
+        }
+        setConfigSettingsAsync(configSettings)
+        setDefaultsAsync(mapOf("default_category" to "ALL"))
+    }
     fun setSkillLiked(skillId: String, isLiked: Boolean) {
         sharedPreferences.edit { putBoolean("like_$skillId", isLiked) }
+        val bundle = Bundle().apply{
+            putString(FirebaseAnalytics.Param.ITEM_ID, skillId)
+            putString("action_type", if(isLiked) "LIKED" else "UNLIKED")
+        }
+        firebaseAnalytics.logEvent("skill_like_changed", bundle)
     }
 
     fun isSkillLiked(skillId: String): Boolean {
         return sharedPreferences.getBoolean("like_$skillId", false)
     }
-    fun trackInterest(categoryId: String) {
-        if (categoryId == "ALL") return
-        val mapCategory = normalizeCategory(categoryId)
-        val currentCount = sharedPreferences.getInt(mapCategory, 0)
-        sharedPreferences.edit { putInt(mapCategory, currentCount + 1) }
-    }
-
-    fun getMostInterestedCategory(): String {
-        val categories = listOf("MUSIC", "TECH", "LANG", "SPORTS", "GENERAL")
-        val hasAnyPreferences = categories.any{ sharedPreferences.getInt(it, 0) > 0}
-        if(!hasAnyPreferences){
-            return "ALL"
+    fun logFilterSelection(categoryId: String) {
+        val cleanCategory = categoryId.uppercase().trim()
+        val bundle = Bundle().apply {
+            putString("filter_value", categoryId)
         }
-        return categories.maxByOrNull { sharedPreferences.getInt(it, 0) } ?: "ALL"
+        firebaseAnalytics.logEvent("filter_chip_selected", bundle)
+        firebaseAnalytics.setUserProperty("user_interest", cleanCategory)
+        Log.d("PreferenceManager","logged user_interest=" + cleanCategory)
+    }
+    fun syncRemoteConfig(onSyncComplete: (String) -> Unit) {
+        remoteConfig.fetchAndActivate().addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                onSyncComplete(getMostInterestedCategory())
+            }
+        }
     }
 
     // Помошна функција за мапирање на македонските текстуални вредности од базата кон константите
@@ -99,10 +116,19 @@ class PreferenceManager(context: Context) {
             "LANG", "ЈАЗИЦИ" -> "LANG"
             "SPORTS", "СПОРТ" -> "SPORTS"
             "GENERAL", "ОПШТО" -> "GENERAL"
-            else -> "GENERAL"
+            else -> "ALL"
         }
     }
+
+    fun getMostInterestedCategory(): String {
+        val remoteValue = remoteConfig.getString("default_category")
+        if (remoteValue.isEmpty()) {
+            return "ALL"
+        }
+        return normalizeCategory(remoteValue)
+    }
 }
+
 
 
 // Функција за проверка дали уредот има активна интернет конекција
@@ -131,7 +157,7 @@ fun SkillFeed(
     )
     val context = LocalContext.current
     val prefManager = remember { PreferenceManager(context) }
-    val analytics = remember { FirebaseAnalytics.getInstance(context) }
+
 
     val currentUserId = authManager.getCurrentUser()?.uid ?: ""
 
@@ -143,7 +169,17 @@ fun SkillFeed(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isRefreshing by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
-    var selectedCategory by rememberSaveable { mutableStateOf(prefManager.getMostInterestedCategory()) }
+    var selectedCategory by rememberSaveable { mutableStateOf("ALL") }
+
+    LaunchedEffect(Unit) {
+        selectedCategory = prefManager.getMostInterestedCategory()
+        if (isOnline(context)) {
+            prefManager.syncRemoteConfig { updatedCategory ->
+                selectedCategory = updatedCategory
+                Log.d("RemoteConfigSync", "Новата категорија е успешна повлечена: $updatedCategory")
+            }
+        }
+    }
 
     fun saveToLocalCache(skillsToCache: List<Skill>){
         coroutineScope.launch(Dispatchers.IO) {
@@ -243,7 +279,7 @@ fun SkillFeed(
                         selected = selectedCategory == item.id,
                         onClick = {
                             selectedCategory = item.id
-                            prefManager.trackInterest(item.id)
+                            prefManager.logFilterSelection(item.id)
                             dbManager.logSkillView("Filter_Category", item.id)
                         },
                         label = { Text(stringResource(item.nameRes)) },
@@ -303,7 +339,6 @@ fun SkillFeed(
                                 SkillCard(
                                     skill = currentSkill,
                                     onLikeClick = {
-                                        // ИНСТАНТ ЛОКАЛНО АЖУРИРАЊЕ НА ЕКРАНОТ ЗА ДА НЕ СЕ НАМАЛИ БРОЈКАТА
                                         val isLiked = currentSkill.likedBy.contains(currentUserId) || prefManager.isSkillLiked(currentSkill.id)
                                         liveSkills = liveSkills.map {
                                             if (it.id == currentSkill.id) {
@@ -313,21 +348,12 @@ fun SkillFeed(
                                                 )
                                             } else it
                                         }
+
                                         toggleLikeSkill(currentSkill, currentUserId, getInstance(), context)
                                     },
                                     prefManager = prefManager,
                                     onChatClick = {
                                         if (currentSkill.authorId != currentUserId) {
-                                            val mappedCat = prefManager.normalizeCategory(currentSkill.category)
-                                            prefManager.trackInterest(mappedCat)
-
-                                            val bundle = Bundle().apply {
-                                                putString(FirebaseAnalytics.Param.ITEM_ID, currentSkill.id)
-                                                putString(FirebaseAnalytics.Param.ITEM_NAME, currentSkill.title)
-                                                putString(FirebaseAnalytics.Param.ITEM_CATEGORY, mappedCat)
-                                                putString("interaction_type", "CHAT_INITIATED")
-                                            }
-                                            analytics.logEvent(FirebaseAnalytics.Event.SELECT_ITEM, bundle)
                                             onChatClick(currentSkill)
                                         } else {
                                             Toast.makeText(context, context.getString(R.string.error_own_skill), Toast.LENGTH_SHORT).show()
@@ -351,21 +377,12 @@ fun SkillFeed(
                                                 )
                                             } else it
                                         }
+
                                         toggleLikeSkill(currentSkill, currentUserId, getInstance(), context)
                                     },
                                     prefManager = prefManager,
                                     onChatClick = {
                                         if (currentSkill.authorId != currentUserId) {
-                                            val mappedCat = prefManager.normalizeCategory(currentSkill.category)
-                                            prefManager.trackInterest(mappedCat)
-
-                                            val bundle = Bundle().apply {
-                                                putString(FirebaseAnalytics.Param.ITEM_ID, currentSkill.id)
-                                                putString(FirebaseAnalytics.Param.ITEM_NAME, currentSkill.title)
-                                                putString(FirebaseAnalytics.Param.ITEM_CATEGORY, mappedCat)
-                                                putString("interaction_type", "CHAT_INITIATED")
-                                            }
-                                            analytics.logEvent(FirebaseAnalytics.Event.SELECT_ITEM, bundle)
                                             onChatClick(currentSkill)
                                         } else {
                                             Toast.makeText(context, context.getString(R.string.error_own_skill), Toast.LENGTH_SHORT).show()

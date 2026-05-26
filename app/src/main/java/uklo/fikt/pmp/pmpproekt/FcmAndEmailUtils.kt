@@ -10,6 +10,16 @@ import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
+import com.google.auth.oauth2.GoogleCredentials
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
+import java.util.Collections
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 
 fun sendEmailIntent(context: Context, receiverEmail: String, skillTitle: String) {
     val intent = Intent(Intent.ACTION_SENDTO).apply {
@@ -79,5 +89,61 @@ fun showLocalNotification(context: Context, title: String, message: String, send
         notificationManager.notify(notificationId, builder.build())
     } catch (e: Exception) {
         Log.e("GLOBAL_FCM", "Грешка при прикажување на нотификацијата", e)
+    }
+}
+fun sendFcmMessageDirectly(context: Context, targetToken: String, senderName: String, senderId: String, messageText: String) {
+    GlobalScope.launch(Dispatchers.IO) {
+        try {
+            val assetManager = context.assets
+            val inputStream = assetManager.open("firebase_secrets.json")
+            val credentials = GoogleCredentials.fromStream(inputStream)
+                .createScoped(Collections.singletonList("https://www.googleapis.com/auth/firebase.messaging"))
+
+            credentials.refreshIfExpired()
+            val accessToken = credentials.accessToken.tokenValue
+
+            val client = OkHttpClient()
+            val mediaType = "application/json; charset=utf-8".toMediaType()
+            val projectId = "skillswap-cce1b"
+
+            val jsonBody = JSONObject().apply {
+                val messageObj = JSONObject().apply {
+                    put("token", targetToken)
+
+                    val dataPayload = JSONObject().apply {
+                        put("title", "Нова порака од $senderName")
+                        put("message", messageText)
+                        put("senderId", senderId)
+                        put("senderName", senderName)
+                    }
+                    put("data", dataPayload)
+                }
+                put("message", messageObj)
+            }
+
+            val request = Request.Builder()
+                .url("https://fcm.googleapis.com/v1/projects/$projectId/messages:send")
+                .post(jsonBody.toString().toRequestBody(mediaType))
+                .addHeader("Authorization", "Bearer $accessToken")
+                .addHeader("Content-Type", "application/json")
+                .build()
+
+            client.newCall(request).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    Log.e("FCM_V1_LIVE", "Мрежна грешка при праќање преку FCM", e)
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    if (response.isSuccessful) {
+                        Log.d("FCM_V1_LIVE", "СУПЕР! Пораката успешно помина преку FCM HTTP V1!")
+                    } else {
+                        Log.e("FCM_V1_LIVE", "FCM грешка: ${response.code} - ${response.body?.string()}")
+                    }
+                }
+            })
+
+        } catch (e: Exception) {
+            Log.e("FCM_V1_LIVE", "Грешка при автентикација или читање на клучот", e)
+        }
     }
 }

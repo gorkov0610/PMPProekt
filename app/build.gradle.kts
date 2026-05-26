@@ -18,7 +18,12 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-
+    packaging {
+        resources {
+            excludes += "/META-INF/INDEX.LIST"
+            excludes += "/META-INF/DEPENDENCIES"
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -62,6 +67,7 @@ dependencies {
     implementation(libs.androidx.compose.runtime.saveable)
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.firebase.config.ktx)
     ksp(libs.androidx.room.compiler)
 
     //Firebase
@@ -70,6 +76,7 @@ dependencies {
     implementation(libs.firebase.firestore) // Firestore
     implementation(libs.firebase.messaging) // Messaging
     implementation(libs.firebase.analytics) // Analytics
+    implementation(libs.firebase.config.ktx)
 
     //Google Play and Facebook
     implementation(libs.play.services.auth)
@@ -88,6 +95,11 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.material3)
     implementation(libs.coil.compose)
+    implementation("com.google.auth:google-auth-library-oauth2-http:1.23.0") {
+        exclude(group = "io.grpc", module = "grpc-core")
+        exclude(group = "io.grpc", module = "grpc-internal")
+        exclude(group = "io.grpc", module = "grpc-api")
+    }
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

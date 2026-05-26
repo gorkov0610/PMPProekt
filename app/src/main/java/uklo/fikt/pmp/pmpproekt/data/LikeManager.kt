@@ -12,21 +12,14 @@ fun toggleLikeSkill(skill: Skill, currentUserId: String, db: FirebaseFirestore, 
     val skillRef = db.collection("skills").document(skill.id)
     val prefManager = PreferenceManager(appContext)
 
-    // ПРОВЕРКА ОД БАЗАТА: Дали мојот UID е веќе во низата на огласот?
-    val isAlreadyLiked = skill.likedBy.contains(currentUserId)
+    val currentlyLikedInApp = prefManager.isSkillLiked(skill.id)
 
-    if (isAlreadyLiked) {
-        // Веќе имало мој UID -> Значи корисникот сака да ОДЛАЈКНЕ
-        prefManager.setSkillLiked(skill.id, false)
-
+    if (!currentlyLikedInApp) {
         skillRef.update(
             "likesCount", FieldValue.increment(-1),
             "likedBy", FieldValue.arrayRemove(currentUserId)
         )
     } else {
-        // Го нема мојот UID -> Корисникот сака да ЛАЈКНЕ
-        prefManager.setSkillLiked(skill.id, true)
-
         skillRef.update(
             "likesCount", FieldValue.increment(1),
             "likedBy", FieldValue.arrayUnion(currentUserId)

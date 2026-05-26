@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.google.firebase.firestore.FirebaseFirestore
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
 import uklo.fikt.pmp.pmpproekt.data.Message
@@ -107,6 +108,25 @@ fun ChatScreen(
         if (currentUserId < receiverId) "${currentUserId}_${receiverId}" else "${receiverId}_${currentUserId}"
     }
 
+    LaunchedEffect(currentUserId, receiverId) {
+        // Земи ја сликата на примачот
+        databaseManager.getUserTokenAndDetails(receiverId) { _, photoUrl ->
+            receiverPhotoUrl = photoUrl
+        }
+
+        // Земи го твоето реално име снимено во 'users' колекцијата
+        if (currentUserId.isNotEmpty() && currentUser?.isAnonymous == false) {
+            FirebaseFirestore.getInstance().collection("users").document(currentUserId).get()
+                .addOnSuccessListener { document ->
+                    if (document != null && document.exists()) {
+                        val nameInDb = document.getString("name")
+                        if (!nameInDb.isNullOrBlank()) {
+                            currentUserName = nameInDb
+                        }
+                    }
+                }
+        }
+    }
     DisposableEffect(chatRoomId) {
         val listenerRegistration = databaseManager.listenForMessages(chatRoomId){ updatedMessages ->
             messages = updatedMessages
@@ -149,7 +169,10 @@ fun ChatScreen(
                         receiverPhotoUrl ?: msg.senderPhotoUrl
                     }
 
-                    val updatedMsg = msg.copy(senderPhotoUrl = displayPhotoUrl)
+                    val updatedMsg = msg.copy(
+                        senderPhotoUrl = displayPhotoUrl,
+                        senderName = msg.senderName
+                    )
                     ChatBubble(
                         message = updatedMsg,
                         isCurrentUser = isCurrentUser,
@@ -174,22 +197,27 @@ fun ChatScreen(
                 IconButton(
                     onClick = {
                         if (textState.isNotBlank()) {
+                            val safeSenderName = if (currentUserName == context.getString(R.string.chat_loading)) {
+                                context.getString(R.string.user)
+                            } else {
+                                currentUserName
+                            }
                             val newMessage = Message(
                                 senderId = currentUserId,
                                 receiverId = receiverId,
                                 text = textState,
                                 timestamp = System.currentTimeMillis(),
-                                senderName = currentUserName,
+                                senderName = safeSenderName,
                                 senderPhotoUrl = currentUser?.photoUrl?.toString() ?: ""
                             )
 
                             databaseManager.sendMessage(
+                                context = context,
                                 chatRoomId = chatRoomId,
                                 message = newMessage,
                                 receiverName = receiverName,
-                                currentUserName = currentUserName
+                                currentUserName = safeSenderName
                             )
-
                             textState = ""
                         }
                     }

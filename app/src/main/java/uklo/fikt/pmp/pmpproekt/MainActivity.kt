@@ -165,6 +165,11 @@ fun MainContent(
     val currentUser = remember(authManager) { authManager.getCurrentUser() }
     val currentUserId = currentUser?.uid ?: ""
 
+    LaunchedEffect(currentUserId) {
+        if (currentUserId.isNotEmpty()) {
+            dbManager.updateFcmTokenForCurrentUser(currentUserId)
+        }
+    }
     DisposableEffect(currentUserId) {
         var listenerRegistration: ListenerRegistration? = null
 
