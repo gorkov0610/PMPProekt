@@ -156,7 +156,6 @@ fun LoginScreen(
             isLoading = false
         }
     }
-
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         if (isTabletOrLandscape) {
             Row(
@@ -288,7 +287,7 @@ fun LoginScreen(
                             name = ""; email = ""; password = ""
                         },
                         onLoadingChange = { isLoading = it },
-                        isTabletOrLandscape = false
+                        isTabletOrLandscape = false,
                     )
                 }
             }
@@ -329,7 +328,9 @@ fun LoginFormContent(
             value = name,
             onValueChange = onNameChange,
             label = { Text(stringResource(R.string.label_username)) },
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
             shape = RoundedCornerShape(12.dp),
             singleLine = true
         )
@@ -339,7 +340,9 @@ fun LoginFormContent(
         value = email,
         onValueChange = onEmailChange,
         label = { Text(stringResource(R.string.label_email)) },
-        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),
         shape = RoundedCornerShape(12.dp),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
         singleLine = true
@@ -349,7 +352,9 @@ fun LoginFormContent(
         value = password,
         onValueChange = onPasswordChange,
         label = { Text(stringResource(R.string.label_password)) },
-        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 24.dp),
         shape = RoundedCornerShape(12.dp),
         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -402,7 +407,9 @@ fun LoginFormContent(
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(50.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = EmeraldPrimary,
                 disabledContentColor = White,
@@ -436,13 +443,24 @@ fun LoginFormContent(
                 googleSignInLauncher.launch(signInIntent)
             },
             onFacebookClick = {
-                authManager.handleFacebookLogin { success, error ->
-                    if (success) {
-                        // 🛠️ Исчистено: saveUserToFirestore веќе се повикува внатре во handleFacebookLogin!
-                        onLoginSuccess()
-                    } else {
-                        Toast.makeText(context, context.getString(R.string.error_fb) + error, Toast.LENGTH_SHORT).show()
+                onLoadingChange(true)
+                val activity = context.findActivity()
+                if (activity != null) {
+                    authManager.handleFacebookLogin(activity) { success, error ->
+                        onLoadingChange(false)
+                        if (success) {
+                            onLoginSuccess()
+                        } else {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.error_fb) + error,
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     }
+                } else {
+                    onLoadingChange(false)
+                    Toast.makeText(context, context.getString(R.string.error_unknown), Toast.LENGTH_SHORT).show()
                 }
             }
         )
@@ -493,7 +511,9 @@ fun SocialLoginButtons(
         ) {
             OutlinedButton(
                 onClick = onGoogleClick,
-                modifier = Modifier.weight(1f).height(56.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, SlateSecondary)
             ) {
@@ -506,7 +526,9 @@ fun SocialLoginButtons(
 
             Button(
                 onClick = onFacebookClick,
-                modifier = Modifier.weight(1f).height(56.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = FbBlue)
             ) {
@@ -524,7 +546,9 @@ fun SocialLoginButtons(
         ) {
             OutlinedButton(
                 onClick = onGoogleClick,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, SlateSecondary)
             ) {
@@ -537,7 +561,9 @@ fun SocialLoginButtons(
 
             Button(
                 onClick = onFacebookClick,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = FbBlue)
             ) {
@@ -549,4 +575,12 @@ fun SocialLoginButtons(
             }
         }
     }
+}
+fun Context.findActivity(): Activity? {
+    var currentContext = this
+    while (currentContext is android.content.ContextWrapper) {
+        if (currentContext is Activity) return currentContext
+        currentContext = currentContext.baseContext
+    }
+    return currentContext as? Activity
 }

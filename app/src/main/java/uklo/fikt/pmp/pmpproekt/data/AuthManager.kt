@@ -1,5 +1,6 @@
 package uklo.fikt.pmp.pmpproekt.data
 
+import android.app.Activity
 import android.content.Context
 import android.util.Log
 import com.facebook.CallbackManager
@@ -96,7 +97,8 @@ class AuthManager(context: Context) {
             .addOnFailureListener { e -> Log.e("Firestore", "Грешка при зачувување", e) }
     }
 
-    fun handleFacebookLogin(onResult: (Boolean, String?) -> Unit) {
+    fun handleFacebookLogin(activity : Activity, onResult: (Boolean, String?) -> Unit) {
+        LoginManager.getInstance().logInWithReadPermissions(activity, listOf("email" ,"public_profile"))
         LoginManager.getInstance().registerCallback(
             callbackManager,
             object : FacebookCallback<LoginResult> {
@@ -105,7 +107,7 @@ class AuthManager(context: Context) {
                     auth.signInWithCredential(credential)
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
-                                saveUserToFirestore() // 🛠️ Автоматски зачувај во база
+                                saveUserToFirestore()
                                 onResult(true, null)
                             } else {
                                 onResult(false, task.exception?.message)

@@ -1,6 +1,7 @@
 package uklo.fikt.pmp.pmpproekt
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -85,6 +86,7 @@ import uklo.fikt.pmp.pmpproekt.ui.theme.SlateSecondary
 import uklo.fikt.pmp.pmpproekt.ui.theme.White
 
 class MainActivity : ComponentActivity() {
+    private lateinit var authManager: AuthManager
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -94,7 +96,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PMPProektTheme {
-                val authManager = remember { AuthManager(applicationContext) }
+                authManager = remember { AuthManager(applicationContext) }
                 val dbManager = remember { DatabaseManager() }
                 val prefManager = PreferenceManager(applicationContext)
                 var user by remember { mutableStateOf<FirebaseUser?>(null) }
@@ -133,6 +135,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        // Го праќаме резултатот до callbackManager на Facebook
+        authManager.getCallbackManager().onActivityResult(requestCode, resultCode, data)
     }
 }
 
