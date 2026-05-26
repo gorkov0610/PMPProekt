@@ -55,13 +55,14 @@ fun SkillCard(
     onDeleteClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-
+    
     var isLikedByMe by remember(skill.id) { mutableStateOf(prefManager.isSkillLiked(skill.id)) }
     val displayLikesCount = remember(skill.id) { mutableIntStateOf(skill.likesCount) }
 
     LaunchedEffect(skill.likesCount) {
         displayLikesCount.intValue = skill.likesCount
     }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -86,9 +87,11 @@ fun SkillCard(
                 color = Color.DarkGray,
                 modifier = Modifier.padding(top = 4.dp)
             )
+
             val translatedCategory = remember(skill.category){
                 getCategoryTranslation(skill.category, context)
             }
+
             // Мета податоци
             Text(
                 text = stringResource(R.string.skill_metadata, skill.authorName, translatedCategory),
@@ -106,7 +109,7 @@ fun SkillCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // ЛЕВО: Срце и број на лајкови (Ова останува секогаш исто)
+                // ЛЕВО: Лајк систем
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = {
@@ -139,7 +142,7 @@ fun SkillCard(
 
                 // ДЕСНО: Паметна замена во зависност од тоа чиј е огласот
                 if (onEditClick != null && onDeleteClick != null) {
-                    // АВТОРСКИ ПРИКАЗ: Корисникот го гледа својот оглас -> Прикажи Уреди и Избриши
+                    // АВТОРСКИ ПРИКАЗ
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onEditClick) {
                             Icon(
@@ -160,10 +163,12 @@ fun SkillCard(
                         }
                     }
                 } else {
-                    // СТАНДАРДЕН ПРИКАЗ: Gmail Интент и Внатрешен Чет
+                    // СТАНДАРДЕН ПРИКАЗ: Контакт опции
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(
-                            onClick = { sendEmailIntent(context, skill.contactEmail, skill.title) }
+                            onClick = {
+                                sendEmailIntent(context, skill.contactEmail, skill.title)
+                            }
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Email,
@@ -189,6 +194,7 @@ fun SkillCard(
         }
     }
 }
+
 private fun getCategoryTranslation(categoryId: String, context: android.content.Context): String {
     val resId = when (categoryId.uppercase()) {
         "GENERAL" -> R.string.cat_general
@@ -196,7 +202,7 @@ private fun getCategoryTranslation(categoryId: String, context: android.content.
         "TECH" -> R.string.cat_tech
         "LANG" -> R.string.cat_languages
         "SPORTS" -> R.string.cat_sports
-        else -> R.string.cat_general // Безбедносен бекап
+        else -> R.string.cat_general
     }
     return context.getString(resId)
 }

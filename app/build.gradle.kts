@@ -62,6 +62,7 @@ dependencies {
     implementation(libs.androidx.compose.runtime.saveable)
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.firebase.config.ktx)
     ksp(libs.androidx.room.compiler)
 
     //Firebase
@@ -70,6 +71,7 @@ dependencies {
     implementation(libs.firebase.firestore) // Firestore
     implementation(libs.firebase.messaging) // Messaging
     implementation(libs.firebase.analytics) // Analytics
+    implementation(libs.firebase.config.ktx)
 
     //Google Play and Facebook
     implementation(libs.play.services.auth)
