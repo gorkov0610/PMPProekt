@@ -2,7 +2,7 @@
     <string name="app_name">SkillSwap</string>
     <string name="welcome_back">Добредојде назад</string>
     <string name="create_account">Креирај сметка</string>
-    <string name="default_web_client_id">941348525636-ucao2pm71q7nlthukcpj9148m1120ibe.apps.googleusercontent.com</string>
+    <string name="default_web_client_id" translatable="false">941348525636-ucao2pm71q7nlthukcpj9148m1120ibe.apps.googleusercontent.com</string>
     <string name="search_hint">Пребарај вештина или категорија…</string>
     <string name="signin_google">Продолжи со Google</string>
     <string name="signin_fb">Продолжи со Facebook</string>
@@ -34,7 +34,6 @@
     <string name="chat">Чет</string>
     <string name="chat_loading">Вчитување…</string>
     <string name="type_message">Напиши порака…</string>
-    <string name="new_message">Нова порака од %1$s</string>
     <string name="default_message_text">Нова порака.</string>
     <string name="default_sender_name">Некој</string>
     <string name="inbox_title">Мои разговори</string>
@@ -91,7 +90,16 @@
     <string name="error_google_token">Не е пронајден Google токен</string>
     <string name="error_firebase">Грешка при Firebase најава</string>
     <string name="error_own_skill">Ова е твоја вештина!</string>
-    <string name="facebook_app_id">2071883153747239</string>
+    <string name="facebook_app_id" translatable="false">2071883153747239</string>
     <string name="fb_login_protocol_scheme" translatable="false">fb2071883153747239</string>
-    <string name="facebook_client_token">966650ee0199ea58955f3faf7c8de4f8</string>
+    <string name="facebook_client_token" translatable="false">966650ee0199ea58955f3faf7c8de4f8</string>
+    <string name="label_transition">Транзиција во главен екран</string>
+    <string name="label_channel_name">SkillSwap пораки</string>
+    <string name="label_channel_desc">Канал за нотификации за пораки во реално време.</string>
+    <string name="msg_title">Нова порака од %1$s</string>
+    <string name="msg_title_reserve">Нова порака</string>
+    <string name="label_offline">Работите во офлајн режим.</string>
+    <string name="label_offline_refresh">Нема интернет, неможе да се освежи.</string>
+    <string name="label_identity_proof">Потврда на идентитет</string>
+    <string name="label_identity_proof_desc">Поради безбедносни причини, ве молиме повторно внесете ја вашата лозинка:</string>
 </resources>

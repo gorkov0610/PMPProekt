@@ -395,10 +395,10 @@ fun ProfileScreen(
                 if (showPasswordDialog) {
                     AlertDialog(
                         onDismissRequest = { showPasswordDialog = false },
-                        title = { Text("Потврда на идентитет", fontWeight = FontWeight.Bold) },
+                        title = { Text(stringResource(R.string.label_identity_proof), fontWeight = FontWeight.Bold) },
                         text = {
                             Column {
-                                Text("Поради безбедносни причини, внесете ја вашата лозинка за да го потврдите бришењето на профилот:")
+                                Text(stringResource(R.string.label_identity_proof_desc))
                                 Spacer(modifier = Modifier.height(12.dp))
                                 OutlinedTextField(
                                     value = confirmPassword,
@@ -438,7 +438,7 @@ fun ProfileScreen(
                                     }
                                 }
                             ) {
-                                Text("Потврди и Избриши", color = White)
+                                Text(stringResource(R.string.btn_continue), color = White)
                             }
                         },
                         dismissButton = {

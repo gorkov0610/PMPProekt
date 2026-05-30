@@ -218,7 +218,7 @@ fun SkillFeed(
                 }
             )
         } else {
-            Toast.makeText(context, "Работите во офлајн режим.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.label_offline), Toast.LENGTH_SHORT).show()
             coroutineScope.launch(Dispatchers.IO) {
                 val cachedList = skillDao.getAllSkills().first()
                 liveSkills = cachedList.map { cached ->
@@ -311,7 +311,7 @@ fun SkillFeed(
                                 }
                             )
                         } else {
-                            Toast.makeText(context, "Нема интернет за освежување.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.label_offline_refresh), Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxSize(),

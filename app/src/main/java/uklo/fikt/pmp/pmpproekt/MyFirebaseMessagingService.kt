@@ -14,10 +14,10 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
 
         // 1. Извлекување податоци од 'data' payload (Data messages)
-        var title = remoteMessage.data["title"] ?: "Нова порака"
+        var title = remoteMessage.data["title"] ?: getString(R.string.msg_title_reserve)
         var message = remoteMessage.data["message"] ?: ""
         var senderId = remoteMessage.data["senderId"] ?: ""
-        var senderName = remoteMessage.data["senderName"] ?: "Корисник"
+        var senderName = remoteMessage.data["senderName"] ?: getString(R.string.user)
 
         // 2. Алтернативно извлекување ако пораката доаѓа како чист 'notification' payload
         remoteMessage.notification?.let {

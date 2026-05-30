@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
                 Crossfade(
                     targetState = isCheckingAuth,
                     animationSpec = tween(durationMillis = 800),
-                    label = "SplashToMainTransition"
+                    label = stringResource(R.string.label_transition)
                 ) { checking ->
                     if (checking) {
                         SplashScreen(onTimeout = {})
@@ -199,7 +199,7 @@ fun MainContent(
                         if (senderId != currentUserId && !isFromCache) {
                             showLocalNotification(
                                 context = context.applicationContext,
-                                title = context.getString(R.string.new_message, senderName),
+                                title = context.getString(R.string.msg_title, senderName),
                                 message = text,
                                 senderId = senderId,
                                 senderName = senderName

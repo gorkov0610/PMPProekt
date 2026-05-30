@@ -34,7 +34,6 @@
     <string name="chat">Chat</string>
     <string name="chat_loading">Loading…</string>
     <string name="type_message">Type a message…</string>
-    <string name="new_message">New message from %1$s </string>
     <string name="default_message_text">New message.</string>
     <string name="default_sender_name">Someone</string>
     <string name="inbox_title">My chat</string>
@@ -91,6 +90,13 @@
     <string name="error_google_token">Google token not found</string>
     <string name="error_firebase">Firebase error</string>
     <string name="error_own_skill">This is your skill!</string>
-    <string name="facebook_app_id">2071883153747239</string>
-    <string name="facebook_client_token">966650ee0199ea58955f3faf7c8de4f8</string>
+    <string name="label_transition">Splash to main transition</string>
+    <string name="label_channel_name">SkillSwap Chat Messages</string>
+    <string name="label_channel_desc">Notification channel for real-time messaging.</string>
+    <string name="msg_title">New message from %1$s</string>
+    <string name="msg_title_reserve">New message</string>
+    <string name="label_offline">Switched to offline mode.</string>
+    <string name="label_offline_refresh">No internet, refresh failed.</string>
+    <string name="label_identity_proof">Proof of identity</string>
+    <string name="label_identity_proof_desc">Please enter your password again, for security reasons:</string>
 </resources>

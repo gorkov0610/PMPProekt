@@ -8,6 +8,7 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.ui.res.stringResource
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import com.google.auth.oauth2.GoogleCredentials
@@ -43,10 +44,10 @@ fun showLocalNotification(context: Context, title: String, message: String, send
     if (notificationManager.getNotificationChannel(channelId) == null) {
         val channel = NotificationChannel(
             channelId,
-            "SkillSwap Chat Messages",
+            context.getString(R.string.label_channel_name),
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Notification channel for real-time chat messages"
+            description = context.getString(R.string.label_channel_desc)
             enableLights(true)
             enableVibration(true)
         }
@@ -111,7 +112,7 @@ fun sendFcmMessageDirectly(context: Context, targetToken: String, senderName: St
                     put("token", targetToken)
 
                     val dataPayload = JSONObject().apply {
-                        put("title", "Нова порака од $senderName")
+                        put("title", context.getString(R.string.msg_title, senderName))
                         put("message", messageText)
                         put("senderId", senderId)
                         put("senderName", senderName)

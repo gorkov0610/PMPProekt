@@ -125,7 +125,7 @@ fun LoginScreen(
                                     }
                                     ?.addOnFailureListener { e ->
                                         isLoading = false
-                                        Toast.makeText(context, "Грешка при бришење: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, context.getString(R.string.error, e.localizedMessage), Toast.LENGTH_SHORT).show()
                                     }
                             } else {
                                 isLoading = false
