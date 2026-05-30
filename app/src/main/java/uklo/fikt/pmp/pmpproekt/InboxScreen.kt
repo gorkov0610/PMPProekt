@@ -82,7 +82,7 @@ fun InboxScreen(
                             userNames[receiverId] ?: stringResource(R.string.user)
                         val lastMessage =
                             chat["lastMessage"] as? String
-                                ?: stringResource(R.string.new_message)
+                                ?: stringResource(R.string.msg_title_reserve)
                         val timestamp = chat["timestamp"] as? Long ?: 0L
 
                         Card(
@@ -93,6 +93,7 @@ fun InboxScreen(
                                     val encodedName = try {
                                         encode(receiverName,"UTF-8")
                                     } catch (e: Exception){
+                                        Log.d("InboxScreen", e.localizedMessage, e)
                                         receiverName
                                     }
                                     onChatClick(receiverId, encodedName)
