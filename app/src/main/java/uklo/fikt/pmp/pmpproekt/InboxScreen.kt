@@ -14,12 +14,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
 import uklo.fikt.pmp.pmpproekt.ui.theme.SlateDark
 import uklo.fikt.pmp.pmpproekt.ui.theme.SlateSecondary
-import java.net.URLEncoder.encode
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,20 +84,18 @@ fun InboxScreen(
                         val lastMessage =
                             chat["lastMessage"] as? String
                                 ?: stringResource(R.string.msg_title_reserve)
-                        val timestamp = chat["timestamp"] as? Long ?: 0L
+                        val timestamp : Date? = when(val rawTimestamp = chat["timestamp"]){
+                            is Timestamp -> rawTimestamp.toDate()
+                            is Date -> rawTimestamp
+                            else -> null
+                        }
 
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 6.dp)
                                 .clickable {
-                                    val encodedName = try {
-                                        encode(receiverName,"UTF-8")
-                                    } catch (e: Exception){
-                                        Log.d("InboxScreen", e.localizedMessage, e)
-                                        receiverName
-                                    }
-                                    onChatClick(receiverId, encodedName)
+                                    onChatClick(receiverId, receiverName)
                                 },
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(
@@ -116,7 +115,7 @@ fun InboxScreen(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 16.sp
                                     )
-                                    if (timestamp > 0L) {
+                                    if(timestamp != null){
                                         Text(
                                             text = formatTimestamp(timestamp),
                                             fontSize = 12.sp,

@@ -1,12 +1,18 @@
 package uklo.fikt.pmp.pmpproekt
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -76,6 +82,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.delay
 import uklo.fikt.pmp.pmpproekt.data.AuthManager
+import uklo.fikt.pmp.pmpproekt.data.CurrentChatState
 import uklo.fikt.pmp.pmpproekt.data.DatabaseManager
 import uklo.fikt.pmp.pmpproekt.data.Screen
 import uklo.fikt.pmp.pmpproekt.data.Skill
@@ -87,13 +94,24 @@ import uklo.fikt.pmp.pmpproekt.ui.theme.White
 
 class MainActivity : ComponentActivity() {
     private lateinit var authManager: AuthManager
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            Log.d("NotificationPermission", "Корисникот ги одобри нотификациите.")
+            Toast.makeText(this, getString(R.string.notifications_enabled_toast), Toast.LENGTH_SHORT).show()
+        } else {
+            Log.w("NotificationPermission", "Корисникот ги одби нотификациите.")
+            Toast.makeText(this, getString(R.string.notifications_disabled_toast), Toast.LENGTH_LONG).show()
+        }
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
 
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
-
+        askNotificationPermission()
         setContent {
             PMPProektTheme {
                 authManager = remember { AuthManager(applicationContext) }
@@ -143,6 +161,17 @@ class MainActivity : ComponentActivity() {
         // Го праќаме резултатот до callbackManager на Facebook
         authManager.getCallbackManager().onActivityResult(requestCode, resultCode, data)
     }
+    private fun askNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                return
+            } else {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
 }
 
 @SuppressLint("LocalContextGetResourceValueCall")
@@ -165,13 +194,19 @@ fun MainContent(
     val currentUser = remember(authManager) { authManager.getCurrentUser() }
     val currentUserId = currentUser?.uid ?: ""
 
+    LaunchedEffect(navBackStackEntry) {
+        val activeChatId = navBackStackEntry?.arguments?.getString("receiverId")
+        CurrentChatState.activeChatUserId = activeChatId
+        Log.d("GLOBAL_FCM", "Семафорот е ажуриран. Моментална активна рута: $currentRoute")
+    }
     LaunchedEffect(currentUserId) {
         if (currentUserId.isNotEmpty()) {
             dbManager.updateFcmTokenForCurrentUser(currentUserId)
         }
     }
-    DisposableEffect(currentUserId) {
+    DisposableEffect(currentUserId, currentRoute) {
         var listenerRegistration: ListenerRegistration? = null
+        val appLaunchTime = com.google.firebase.Timestamp.now()
 
         if (currentUserId.isNotEmpty()) {
             val db = FirebaseFirestore.getInstance()
@@ -179,6 +214,7 @@ fun MainContent(
 
             listenerRegistration = db.collectionGroup("messages")
                 .whereEqualTo("receiverId", currentUserId)
+                .whereGreaterThan("timestamp", appLaunchTime)
                 .orderBy("timestamp",Query.Direction.DESCENDING)
                 .limit(1)
                 .addSnapshotListener { snapshot, e ->
@@ -195,8 +231,8 @@ fun MainContent(
                         val text = latestDoc.getString("text") ?: context.getString(R.string.default_message_text)
                         val senderName = latestDoc.getString("senderName") ?: context.getString(R.string.default_sender_name)
 
-
-                        if (senderId != currentUserId && !isFromCache) {
+                        val activeChatId = CurrentChatState.activeChatUserId
+                        if (senderId != currentUserId && !isFromCache && senderId != activeChatId) {
                             showLocalNotification(
                                 context = context.applicationContext,
                                 title = context.getString(R.string.msg_title, senderName),
@@ -204,6 +240,8 @@ fun MainContent(
                                 senderId = senderId,
                                 senderName = senderName
                             )
+                        }else{
+                            Log.d("GLOBAL_FCM", "Нотификацијата е пригушена, пораката е од кеш, четот е веќе отворен или станува збор за сопствена порака.")
                         }
                     }
                 }
@@ -239,7 +277,6 @@ fun MainContent(
                 )
             } else if (currentRoute?.startsWith("chat/") == true) {
                 val authorName = navBackStackEntry?.arguments?.getString("authorName") ?: stringResource(R.string.user)
-
                 TopAppBar(
                     title = {
                         Text(

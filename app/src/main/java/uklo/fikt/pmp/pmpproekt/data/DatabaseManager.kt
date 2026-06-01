@@ -6,6 +6,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.analytics.analytics
 import com.google.firebase.analytics.logEvent
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
@@ -60,7 +61,7 @@ class DatabaseManager {
 
         val chatRoomInfo = mapOf(
             "lastMessage" to message.text,
-            "timestamp" to message.timestamp,
+            "timestamp" to FieldValue.serverTimestamp(),
             "participants" to listOf(message.senderId, message.receiverId),
             "userNames" to mapOf(
                 message.senderId to currentUserName,
@@ -98,7 +99,7 @@ class DatabaseManager {
         return db.collection("chats")
             .document(chatRoomId)
             .collection("messages")
-            .orderBy("timestamp", Query.Direction.ASCENDING)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, e ->
                 if (e != null) {
                     Log.e("Firestore_Chat", "Грешка при слушање пораки", e)

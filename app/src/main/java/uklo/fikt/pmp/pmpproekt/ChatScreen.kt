@@ -33,9 +33,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-fun formatTimestamp(timestamp: Long): String {
+fun formatTimestamp(timestamp: Date?): String {
+    if(timestamp == null){
+        return ""
+    }
     val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-    return sdf.format(Date(timestamp))
+    return sdf.format(timestamp)
 }
 
 @Composable
@@ -139,7 +142,7 @@ fun ChatScreen(
 
     LaunchedEffect(messages.size) {
         if(messages.isNotEmpty()){
-            listState.animateScrollToItem(messages.size - 1)
+            listState.animateScrollToItem(0)
         }
     }
 
@@ -158,7 +161,7 @@ fun ChatScreen(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f).imeNestedScroll(),
-                reverseLayout = false
+                reverseLayout = true
             ) {
                 items(messages) { msg ->
                     val isCurrentUser = msg.senderId == currentUserId
@@ -206,7 +209,6 @@ fun ChatScreen(
                                 senderId = currentUserId,
                                 receiverId = receiverId,
                                 text = textState,
-                                timestamp = System.currentTimeMillis(),
                                 senderName = safeSenderName,
                                 senderPhotoUrl = currentUser?.photoUrl?.toString() ?: ""
                             )

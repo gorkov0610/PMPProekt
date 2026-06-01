@@ -99,4 +99,6 @@
     <string name="label_offline_refresh">No internet, refresh failed.</string>
     <string name="label_identity_proof">Proof of identity</string>
     <string name="label_identity_proof_desc">Please enter your password again, for security reasons:</string>
+    <string name="notifications_enabled_toast">Notifications enabled!</string>
+    <string name="notifications_disabled_toast">You won\'t get notifications for new messages.</string>
 </resources>

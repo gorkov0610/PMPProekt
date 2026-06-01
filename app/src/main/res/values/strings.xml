@@ -102,4 +102,6 @@
     <string name="label_offline_refresh">Нема интернет, неможе да се освежи.</string>
     <string name="label_identity_proof">Потврда на идентитет</string>
     <string name="label_identity_proof_desc">Поради безбедносни причини, ве молиме повторно внесете ја вашата лозинка:</string>
+    <string name="notifications_enabled_toast">Нотификациите се вклучени!</string>
+    <string name="notifications_disabled_toast">Нема да добивате известувања за нови пораки.</string>
 </resources>
