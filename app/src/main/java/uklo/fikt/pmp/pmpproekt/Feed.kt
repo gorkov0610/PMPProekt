@@ -63,6 +63,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.remoteconfig.remoteConfigSettings
 import com.google.firebase.remoteconfig.remoteConfig
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 data class CategoryItem(
     val id: String,
@@ -98,7 +99,7 @@ class PreferenceManager(context: Context) {
         }
         firebaseAnalytics.logEvent("filter_chip_selected", bundle)
         firebaseAnalytics.setUserProperty("user_interest", cleanCategory)
-        Log.d("PreferenceManager","logged user_interest=" + cleanCategory)
+        Log.d("PreferenceManager", "logged user_interest=$cleanCategory")
     }
     fun syncRemoteConfig(onSyncComplete: (String) -> Unit) {
         remoteConfig.fetchAndActivate().addOnCompleteListener { task ->
@@ -221,7 +222,7 @@ fun SkillFeed(
             Toast.makeText(context, context.getString(R.string.label_offline), Toast.LENGTH_SHORT).show()
             coroutineScope.launch(Dispatchers.IO) {
                 val cachedList = skillDao.getAllSkills().first()
-                liveSkills = cachedList.map { cached ->
+                val mappedSkills = cachedList.map { cached ->
                     val isLikedLocally = prefManager.isSkillLiked(cached.id)
                     Skill(
                         id = cached.id,
@@ -234,6 +235,9 @@ fun SkillFeed(
                         likesCount = cached.likesCount,
                         likedBy = if (isLikedLocally) listOf(currentUserId) else emptyList()
                     )
+                }
+                withContext(Dispatchers.Main){
+                    liveSkills = mappedSkills
                 }
             }
         }
