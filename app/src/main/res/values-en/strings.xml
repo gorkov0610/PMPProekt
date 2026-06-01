@@ -29,8 +29,6 @@
     <string name="email_body">Hi, I am interested in your skill posted on SkillSwap.</string>
     <string name="choose_mail_client">Choose mail app: </string>
     <string name="no_email_client">No email app found.</string>
-    <string name="notification_like_title">Milestone like!</string>
-    <string name="notification_like_message">The skill \"%1$s\" has reached %2$d likes!</string>
     <string name="chat">Chat</string>
     <string name="chat_loading">Loading…</string>
     <string name="type_message">Type a message…</string>

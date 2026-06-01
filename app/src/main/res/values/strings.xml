@@ -29,8 +29,6 @@
     <string name="email_body">Здраво, заинтересиран сум за твојата вештина објавена на SkillSwap.</string>
     <string name="choose_mail_client">Избери меил апликација: </string>
     <string name="no_email_client">Нема апликација за е-пошта</string>
-    <string name="notification_like_title">Јубилеен лајк!</string>
-    <string name="notification_like_message">Огласот \"%1$s\" достигна %2$d лајкови!</string>
     <string name="chat">Чет</string>
     <string name="chat_loading">Вчитување…</string>
     <string name="type_message">Напиши порака…</string>
